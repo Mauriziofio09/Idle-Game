@@ -1,0 +1,127 @@
+/**
+ * Design tokens — the single translation of styles.md into CSS.
+ *
+ * Rules (prompt.md section 8):
+ *   - styles.md is the only source for colours, type, spacing, radii, shadows and motion.
+ *   - Components use these custom properties only. No hard-coded colour, size or font anywhere else.
+ *   - Tokens marked DERIVED are not in styles.md; they are built from existing tokens and are
+ *     documented in PLAN.md under "Ableitungen aus styles.md". Never invent a new aesthetic here.
+ */
+
+:root {
+  /* ---------------------------------------------------------------- Colours */
+  /* styles.md > Colors */
+  --color-background: #ffffff;
+  --color-text-primary: #1a1a1a;
+  --color-text-muted: #6b7280;
+  --color-border: #000000;
+  --color-accent: #0a8c3a;
+
+  /* styles.md > Components > buttons */
+  --color-button-primary-bg: #000000;
+  --color-button-primary-fg: #ffffff;
+  --color-button-secondary-bg: #ffffff;
+  --color-button-secondary-fg: #000000;
+
+  /* styles.md > Shape Language > icon containers: "transparent or light-gray (gray-50)" */
+  --color-surface-subtle: #f9fafb;
+
+  /* DERIVED 1 — water: the only neutral tone styles.md carries. No blue, no gradient. */
+  --color-water: var(--color-text-muted);
+  /* DERIVED 2 — rain strokes reuse the border black. */
+  --color-rain: var(--color-border);
+  /* DERIVED 3 — meter fill is black; green stays reserved for what was saved. */
+  --color-meter-fill: var(--color-border);
+  --color-meter-track: var(--color-background);
+  /* DERIVED 4 — sent units: exactly the "success state / data highlight" use styles.md prescribes. */
+  --color-sent: var(--color-accent);
+  /* DERIVED 6 — a lost thing inverts: black plate, white type. Contrast, never blur. */
+  --color-lost-bg: var(--color-border);
+  --color-lost-fg: var(--color-background);
+
+  /* ------------------------------------------------------------ Typography */
+  /* styles.md > Typography — system stack, no webfont, no external request */
+  --font-family-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --font-size-h1: 36px;
+  --font-size-h2: 24px; /* DERIVED — one step down, reuses the stat-number size */
+  --font-size-stat: 24px;
+  --font-size-button: 16px;
+  --font-size-body: 14px;
+  --font-size-label: 12px;
+
+  --font-weight-heading: 700;
+  --font-weight-button: 500;
+  --font-weight-body: 400;
+
+  --letter-spacing-tight: -0.02em; /* styles.md "tracking-tight" */
+  --letter-spacing-label: 0.06em; /* DERIVED — for the uppercase section labels */
+  --line-height-none: 1; /* styles.md "leading-none" for stat numbers */
+  --line-height-body: 1.5;
+
+  /* --------------------------------------------------------- Shape language */
+  /* styles.md > Shape Language — "Border-radius: 0px everywhere." */
+  --radius: 0;
+  --border-width: 2px;
+  --border: var(--border-width) solid var(--color-border);
+  --border-hairline: 1px solid var(--color-border); /* DERIVED — inner dividers inside a bordered card */
+  --shadow: none; /* styles.md > "No box-shadows." */
+
+  --icon-box-lg: 64px;
+  --icon-box-sm: 40px;
+  --icon-stroke-width: 2; /* styles.md > Components > Icons (Lucide, 2px stroke) */
+  /* DERIVED 9 — the icon inside a box; styles.md sizes the box, not the glyph. */
+  --icon-size-md: 24px;
+  --icon-size-lg: 32px;
+
+  /* ----------------------------------------------------------- Spacing scale */
+  /* styles.md > Layout — "16–24px gaps", cards "16px padding" */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px; /* DERIVED — page-level rhythm only ("generous whitespace") */
+  --space-8: 48px; /* DERIVED — page-level rhythm only */
+
+  --button-padding-block: 16px; /* styles.md > Components > primary button */
+  --card-padding: var(--space-4);
+
+  /* ----------------------------------------------------------------- Layout */
+  --layout-column-max: 400px; /* styles.md > Layout — "narrow max-width (~400px card stack)" */
+  --layout-grid-max: 1200px; /* DERIVED, decision 9 in PLAN.md */
+  --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
+  /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
+  --stat-column-min: 96px;
+
+  /* ----------------------------------------------------------------- Motion */
+  /* DERIVED 8 — styles.md is silent on motion; linear and short is the most restrained reading. */
+  --motion-fast: 120ms;
+  --motion-slow: 400ms;
+  --motion-ease: linear;
+
+  /* ------------------------------------------------------------------ Focus */
+  /* DERIVED 7 — the accent is the only colour that reads on both black and white. */
+  --focus-outline: var(--border-width) solid var(--color-accent);
+  --focus-outline-offset: 2px;
+
+  /* --------------------------------------------------------------- Patterns */
+  /* DERIVED 5 — "critical" is a hard-stop stripe pattern, never a new hue and never a blend.
+     Solid black bars with hard stops: no colour interpolation is visible. */
+  --pattern-critical: repeating-linear-gradient(
+    45deg,
+    var(--color-border) 0,
+    var(--color-border) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+}
+
+/* prompt.md section 7 — animations respect prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-slow: 0ms;
+  }
+}

@@ -1,0 +1,36 @@
+<main>
+  <header>
+    <app-icon-box size="lg" class="accent">
+      <app-icon name="archive" size="lg" />
+    </app-icon-box>
+    <h1>{{ content.title }}</h1>
+    <p class="subtitle">{{ content.subtitle }}</p>
+    <p class="seed">{{ content.archivePrefix }}{{ seed() }}</p>
+  </header>
+
+  <app-card [label]="panels.condition">
+    <div class="stats">
+      <app-stat [value]="energy()" [label]="labels.energy" />
+      <app-stat [value]="material()" [label]="labels.material" />
+      <app-stat [value]="entropy()" [label]="labels.entropy" />
+      <app-stat [value]="water()" [label]="labels.water" />
+      <app-stat [value]="runtime()" [label]="labels.runtime" />
+    </div>
+  </app-card>
+
+  <app-card [label]="panels.systems">
+    <ul class="systems">
+      @for (system of systems(); track system.id) {
+        <li>
+          <app-meter
+            [label]="system.name + ' · ' + system.floor"
+            [value]="system.integrity"
+            [critical]="system.critical"
+            [lost]="system.lost"
+            [text]="system.stateText"
+          />
+        </li>
+      }
+    </ul>
+  </app-card>
+</main>
