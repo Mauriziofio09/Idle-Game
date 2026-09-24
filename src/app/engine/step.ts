@@ -16,7 +16,6 @@ import {
   COLLECTIONS,
   ENERGY,
   ENTROPY,
-  FLOOR_COUNT,
   HUMIDITY,
   SECONDS_PER_TICK,
   SYSTEMS,
@@ -33,7 +32,11 @@ import {
   COLLECTION_IDS,
   SYSTEM_IDS,
   cloneState,
+  floorCount,
   isFlooded,
+  scenarioOf,
+  systemFloor,
+  topFloor,
   totalIntact,
   type CollectionId,
   type GameState,
@@ -49,7 +52,8 @@ export function production(state: GameState): number {
   if (generator.lost || !generator.on) {
     return 0;
   }
-  return (ENERGY.generatorOutputPerSecond * generator.integrity) / 100;
+  // The scenario decides how strong the generator is; everything else is the same house.
+  return (scenarioOf(state).generatorOutputPerSecond * generator.integrity) / 100;
 }
 
 /** Energy demanded per second by everything currently switched on. */
@@ -93,7 +97,9 @@ export function transmitRate(state: GameState, supplyRatio: number): number {
 /** Water entering per second: rain, made worse by entropy. */
 export function inflow(state: GameState): number {
   return (
-    WATER.rainBasePerSecond * (1 + state.entropy / ENTROPY.rainDivisor) * state.effects.inflowFactor
+    scenarioOf(state).rainBasePerSecond *
+    (1 + state.entropy / ENTROPY.rainDivisor) *
+    state.effects.inflowFactor
   );
 }
 
@@ -119,7 +125,7 @@ export function humidityTarget(state: GameState, floor: number, supplyRatio: num
   }
 
   // Only the attic suffers from a leaking roof. A lost roof leaks as if at zero integrity.
-  if (floor === FLOOR_COUNT - 1) {
+  if (floor === topFloor(state)) {
     const roof = state.systems.roof;
     const integrity = roof.lost ? 0 : roof.integrity;
     target += (100 - integrity) * HUMIDITY.roofLeakFactor;
@@ -189,10 +195,10 @@ export function step(state: GameState): StepResult {
   next.water = clamp(
     next.water + (inflow(next) - outflow(next, supplyRatio)) * dt,
     WATER.min,
-    WATER.max,
+    floorCount(next),
   );
   const floodedAfter = floodedFlags(next);
-  for (let floor = 0; floor < FLOOR_COUNT; floor++) {
+  for (let floor = 0; floor < floorCount(next); floor++) {
     // Only the first time. Water recedes whenever the pumps out-pump the rain — during
     // a rain pause, or when a protocol switches them on — so a floor can cross its line
     // again and again. The timeline records what fell, not how often the level wobbled.
@@ -203,7 +209,7 @@ export function step(state: GameState): StepResult {
   }
 
   // 5 — Humidity drifts towards its target rather than jumping to it.
-  for (let floor = 0; floor < FLOOR_COUNT; floor++) {
+  for (let floor = 0; floor < floorCount(next); floor++) {
     const target = humidityTarget(next, floor, supplyRatio);
     const current = next.humidity[floor];
     next.humidity[floor] = current + (target - current) * HUMIDITY.approachPerSecond * dt;
@@ -215,7 +221,7 @@ export function step(state: GameState): StepResult {
     if (system.lost) {
       continue;
     }
-    const floor = SYSTEMS[id].floor;
+    const floor = systemFloor(next, id);
     // The mast wears faster while it is sending — that is the price of the only thing
     // in this house that saves anything.
     const baseDecay =
@@ -275,7 +281,10 @@ export function step(state: GameState): StepResult {
       // Close the books exactly. Summing float losses tick after tick leaves a residue
       // of ~1e-14, which is harmless in play but makes the totals fail a strict check.
       collection.intact = 0;
-      collection.rotted = Math.max(0, COLLECTIONS.unitsEach - collection.sent);
+      collection.rotted = Math.max(
+        0,
+        COLLECTIONS.unitsEach - collection.sent - collection.burned,
+      );
       collection.lost = true;
       if (next.transmitting === id) {
         next.transmitting = null;
@@ -290,7 +299,31 @@ export function step(state: GameState): StepResult {
     }
   }
 
-  // 8 — The mast sends. Whatever leaves the building is safe for good.
+  // 8 — Collections on their way arrive. They rot where they started until then, so a
+  //     move is never a way to pause the decay.
+  for (const id of COLLECTION_IDS) {
+    const collection = next.collections[id];
+    if (collection.transitTicks <= 0) {
+      continue;
+    }
+    // Something that rotted away on the stairs does not arrive anywhere.
+    if (collection.lost) {
+      collection.transitTicks = 0;
+      continue;
+    }
+    collection.transitTicks -= 1;
+    if (collection.transitTicks === 0) {
+      collection.floor += 1;
+      events.push({
+        type: 'relocation-finished',
+        tick: next.tick,
+        collectionId: id as CollectionId,
+        toFloor: collection.floor,
+      });
+    }
+  }
+
+  // 9 — The mast sends. Whatever leaves the building is safe for good.
   if (next.transmitting !== null) {
     const sending = next.collections[next.transmitting];
     const moved = Math.min(sending.intact, transmitRate(next, supplyRatio) * dt);
@@ -306,14 +339,14 @@ export function step(state: GameState): StepResult {
     }
   }
 
-  // 9 — The custodian depot acts, on the state the player would now see. Protocols go
+  // 10 — The custodian depot acts, on the state the player would now see. Protocols go
   //     through the same applyAction the player uses, which is what keeps an evening
   //     away identical to an evening at the keyboard.
   const automated = runProtocols(next);
   const after = automated.state;
   events.push(...automated.events);
 
-  // 10 — Is the archive still speaking?
+  // 11 — Is the archive still speaking?
   const endReason = checkEnd(after);
   if (endReason) {
     after.ended = true;
@@ -326,7 +359,7 @@ export function step(state: GameState): StepResult {
 
 function checkEnd(state: GameState): GameState['endReason'] {
   const generator = state.systems.generator;
-  const generatorGone = generator.lost || isFlooded(state, SYSTEMS.generator.floor);
+  const generatorGone = generator.lost || isFlooded(state, systemFloor(state, 'generator'));
   if (state.energy <= 0 && generatorGone) {
     return 'silence';
   }
@@ -343,8 +376,8 @@ function alreadyFlooded(state: GameState, floor: number): boolean {
 }
 
 function floodedFlags(state: GameState): boolean[] {
-  const flags = new Array<boolean>(FLOOR_COUNT);
-  for (let floor = 0; floor < FLOOR_COUNT; floor++) {
+  const flags = new Array<boolean>(floorCount(state));
+  for (let floor = 0; floor < floorCount(state); floor++) {
     flags[floor] = isFlooded(state, floor);
   }
   return flags;
@@ -361,6 +394,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function systemIdsOnFloor(floor: number): SystemId[] {
-  return SYSTEM_IDS.filter((id) => SYSTEMS[id].floor === floor);
+export function systemIdsOnFloor(state: GameState, floor: number): SystemId[] {
+  return SYSTEM_IDS.filter((id) => systemFloor(state, id) === floor);
 }

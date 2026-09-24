@@ -6,6 +6,7 @@ import { LEGACY, OFFLINE, PROTOCOLS, SYSTEMS } from '../engine/balance';
 import { demand, production } from '../engine/step';
 import { simulate } from '../engine/offline';
 import { createInitialState } from '../engine/state';
+import { dailySeed } from '../engine/rng';
 import { SaveService } from './save';
 import { GAME_STORAGE, memoryStorage, type KeyValueStorage } from './storage';
 import { GameStore } from './game-store';
@@ -499,6 +500,97 @@ describe('GameStore', () => {
       expect(reloaded.protocols()).toEqual([
         { id: rule.id, condition, action, enabled: false, firedCount: 3 },
       ]);
+    });
+  });
+
+  describe('archives and links', () => {
+    const NOW2 = 1_700_000_000_000;
+
+    it('opens the house a link names, not whatever was last played', () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const linked = TestBed.inject(GameStore);
+
+      linked.initialize(NOW2, '4F2A', 'tower');
+
+      expect(linked.seed()).toBe('4F2A');
+      expect(linked.scenarioId()).toBe('tower');
+      expect(linked.floorCount()).toBe(7);
+    });
+
+    it('falls back to the standard house for a link naming one it does not know', () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const linked = TestBed.inject(GameStore);
+
+      linked.initialize(NOW2, '4F2A', 'atlantis');
+      expect(linked.scenarioId()).toBe('standard');
+    });
+
+    it('plays the daily archive in the standard house, whatever is running', () => {
+      store.startNewArchive(NOW2, '9B01', 'tower');
+      expect(store.scenarioId()).toBe('tower');
+
+      store.startDailyArchive(NOW2);
+
+      // Everyone has to get the same archive on the same day, so the house is fixed.
+      expect(store.scenarioId()).toBe('standard');
+      expect(store.seed()).toBe(dailySeed(2023, 11, 14));
+    });
+
+    it('drops an imported relocation rule the legacy has not paid for', () => {
+      const saves = TestBed.inject(SaveService);
+      const other = createInitialState('9B01');
+      other.protocols = [
+        {
+          id: 'r1',
+          condition: { kind: 'material-above', value: 1 },
+          action: { type: 'relocate', collectionId: 'maps' },
+          enabled: true,
+          firedCount: 0,
+        },
+      ];
+
+      expect(store.relocateUnlocked()).toBe(false);
+      expect(store.importRun(saves.exportRun(other, NOW2))).toEqual({ ok: true });
+      // The engine runs whatever is in the state, so the gate has to hold here.
+      expect(store.protocols()).toEqual([]);
+    });
+
+    it('keeps an imported relocation rule once it has been earned', () => {
+      const saves = TestBed.inject(SaveService);
+      saves.writeLegacy({
+        schemaVersion: 1,
+        sent: { maps: LEGACY.relocateThreshold },
+        runs: 1,
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const earned = TestBed.inject(GameStore);
+      earned.initialize(NOW2);
+      expect(earned.relocateUnlocked()).toBe(true);
+
+      const other = createInitialState('9B01');
+      other.protocols = [
+        {
+          id: 'r1',
+          condition: { kind: 'material-above', value: 1 },
+          action: { type: 'relocate', collectionId: 'maps' },
+          enabled: true,
+          firedCount: 0,
+        },
+      ];
+      expect(earned.importRun(TestBed.inject(SaveService).exportRun(other, NOW2))).toEqual({
+        ok: true,
+      });
+      expect(earned.protocols().length).toBe(1);
     });
   });
 });

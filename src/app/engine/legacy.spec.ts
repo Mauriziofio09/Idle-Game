@@ -5,7 +5,10 @@ import {
   emptyLegacy,
   fragmentsUnlocked,
   protocolSlotsFor,
+  relocateUnlocked,
+  scenarioUnlocked,
   totalSent,
+  unitsToScenario,
   unitsToNextFragment,
   unitsToNextSlot,
 } from './legacy';
@@ -59,6 +62,25 @@ describe('the legacy', () => {
       PROTOCOLS.startingSlots + 1,
     );
     expect(protocolSlotsFor(withSent({ maps: 99_999 }))).toBe(PROTOCOLS.maxSlots);
+  });
+
+  it('unlocks relocation for protocols at the documented threshold', () => {
+    expect(relocateUnlocked(emptyLegacy())).toBe(false);
+    expect(relocateUnlocked(withSent({ maps: LEGACY.relocateThreshold - 1 }))).toBe(false);
+    expect(relocateUnlocked(withSent({ maps: LEGACY.relocateThreshold }))).toBe(true);
+  });
+
+  it('opens the other archives at their thresholds, and the standard one at once', () => {
+    expect(scenarioUnlocked(emptyLegacy(), 'standard')).toBe(true);
+    expect(scenarioUnlocked(emptyLegacy(), 'drought')).toBe(false);
+    expect(scenarioUnlocked(emptyLegacy(), 'tower')).toBe(false);
+
+    const rich = withSent({ maps: LEGACY.scenarioThresholds['tower'] });
+    expect(scenarioUnlocked(rich, 'drought')).toBe(true);
+    expect(scenarioUnlocked(rich, 'tower')).toBe(true);
+
+    expect(unitsToScenario(emptyLegacy(), 'standard')).toBeNull();
+    expect(unitsToScenario(emptyLegacy(), 'drought')).toBe(LEGACY.scenarioThresholds['drought']);
   });
 
   it('counts down to the next slot, then says all are earned', () => {

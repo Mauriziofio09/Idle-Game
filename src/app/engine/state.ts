@@ -6,20 +6,18 @@
  */
 
 import {
-  COLLECTION_FLOORS,
   ENERGY,
-  FLOOR_COUNT,
   HUMIDITY,
-  MATERIAL,
   PROTOCOLS,
   COLLECTIONS,
+  SCENARIOS,
   START_INTEGRITY,
-  SYSTEMS,
+  type ScenarioId,
 } from './balance';
 import { createCursor, nextRange, seedToState } from './rng';
 import type { ProtocolRule } from './protocol-types';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SYSTEM_IDS = [
   'generator',
@@ -42,8 +40,11 @@ export const COLLECTION_IDS = [
 ] as const;
 export type CollectionId = (typeof COLLECTION_IDS)[number];
 
-/** 0 cellar, 1 ground floor, 2 first floor, 3 second floor, 4 attic. */
-export type FloorIndex = 0 | 1 | 2 | 3 | 4;
+/**
+ * 0 is the cellar, 1 the ground floor, the last one the attic. How many there are
+ * depends on the scenario, so this is a plain index rather than a fixed union.
+ */
+export type FloorIndex = number;
 
 export interface SystemState {
   integrity: number;
@@ -60,8 +61,13 @@ export interface CollectionState {
   intact: number;
   /** Units transmitted. Safe forever. */
   sent: number;
-  /** Units that rotted away. intact + sent + rotted === COLLECTIONS.unitsEach. */
+  /** Units that rotted away. */
   rotted: number;
+  /** Units burned for power. Gone by the player's own hand.
+   *  intact + sent + rotted + burned === COLLECTIONS.unitsEach. */
+  burned: number;
+  /** Ticks left before it arrives one floor up, or 0 when it is standing still. */
+  transitTicks: number;
   lost: boolean;
 }
 
@@ -98,13 +104,15 @@ export interface PendingEvent {
 /** What fell, and when. The chronicle reads this back as a timeline. */
 export interface ChronicleEntry {
   tick: number;
-  kind: 'system-lost' | 'collection-lost' | 'floor-flooded';
+  kind: 'system-lost' | 'collection-lost' | 'floor-flooded' | 'collection-burned';
   /** A SystemId, a CollectionId, or a floor index as a string. */
   id: string;
 }
 
 export interface GameState {
   schemaVersion: number;
+  /** Which archive this is. Decides the layout and the starting conditions. */
+  scenarioId: ScenarioId;
   seed: string;
   /** mulberry32 state — part of the save so a reload continues the same run. */
   rngState: number;
@@ -145,12 +153,45 @@ export interface GameState {
   endReason: EndReason | null;
 }
 
-function floorOf(id: SystemId): FloorIndex {
-  return SYSTEMS[id].floor as FloorIndex;
+/** The archive this run is playing in. */
+export function scenarioOf(state: GameState): (typeof SCENARIOS)[ScenarioId] {
+  return SCENARIOS[state.scenarioId];
 }
 
-export function systemFloor(id: SystemId): FloorIndex {
-  return floorOf(id);
+export function floorCount(state: GameState): number {
+  return scenarioOf(state).floors;
+}
+
+/** The top floor, where the roof and the mast are. */
+export function topFloor(state: GameState): FloorIndex {
+  return floorCount(state) - 1;
+}
+
+export function systemFloor(state: GameState, id: SystemId): FloorIndex {
+  return scenarioOf(state).systemFloors[id];
+}
+
+/**
+ * How many collections a floor will be holding.
+ *
+ * Counts the ones standing there and the ones already on their way up to it: a floor
+ * that is about to be full is full. Counting only what has arrived would let three
+ * moves to the same floor all start in the same instant and all be allowed.
+ */
+export function collectionsOn(state: GameState, floor: number): number {
+  let count = 0;
+  for (const id of COLLECTION_IDS) {
+    const collection = state.collections[id];
+    if (collection.lost) {
+      continue;
+    }
+    const destination =
+      collection.transitTicks > 0 ? collection.floor + 1 : collection.floor;
+    if (destination === floor) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 /**
@@ -159,8 +200,10 @@ export function systemFloor(id: SystemId): FloorIndex {
  */
 export function createInitialState(
   seed: string,
-  options: { protocolSlots?: number } = {},
+  options: { protocolSlots?: number; scenarioId?: ScenarioId } = {},
 ): GameState {
+  const scenarioId = options.scenarioId ?? 'standard';
+  const scenario = SCENARIOS[scenarioId];
   const cursor = createCursor(seedToState(seed));
 
   const systems = {} as Record<SystemId, SystemState>;
@@ -178,24 +221,27 @@ export function createInitialState(
   const collections = {} as Record<CollectionId, CollectionState>;
   for (const id of COLLECTION_IDS) {
     collections[id] = {
-      floor: COLLECTION_FLOORS[id] as FloorIndex,
+      floor: scenario.collectionFloors[id],
       intact: COLLECTIONS.unitsEach,
       sent: 0,
       rotted: 0,
+      burned: 0,
+      transitTicks: 0,
       lost: false,
     };
   }
 
   return {
     schemaVersion: SCHEMA_VERSION,
+    scenarioId,
     seed,
     rngState: cursor.state,
     tick: 0,
     entropy: 0,
     water: 0,
-    humidity: new Array<number>(FLOOR_COUNT).fill(HUMIDITY.base),
+    humidity: new Array<number>(scenario.floors).fill(HUMIDITY.base),
     energy: ENERGY.start,
-    material: MATERIAL.start,
+    material: scenario.materialStart,
     systems,
     collections,
     transmitting: null,

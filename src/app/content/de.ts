@@ -18,13 +18,69 @@ export const PANEL_LABELS = {
   systems: 'Systeme',
 } as const;
 
-export const FLOOR_NAMES = [
-  'Keller',
-  'Erdgeschoss',
+/**
+ * Floor names. The cellar and the ground floor are always the same, the top floor is
+ * always the attic, and the storeys in between are counted — so the same wording works
+ * for a five-floor archive and for the seven-floor tower.
+ */
+const STOREY_NAMES = [
   'Erster Stock',
   'Zweiter Stock',
-  'Dachboden',
+  'Dritter Stock',
+  'Vierter Stock',
+  'Fünfter Stock',
 ] as const;
+
+export function floorName(index: number, floors: number): string {
+  if (index <= 0) {
+    return 'Keller';
+  }
+  if (index === 1) {
+    return 'Erdgeschoss';
+  }
+  if (index >= floors - 1) {
+    return 'Dachboden';
+  }
+  return STOREY_NAMES[index - 2] ?? `${index - 1}. Stock`;
+}
+
+/**
+ * German needs the case, not just the name: "in den Keller", but "ins Erdgeschoss" and
+ * "auf den Dachboden". Composing a preposition with a nominative name produces
+ * "in den Erdgeschoss" and "im Erster Stock", so the whole phrase is written here.
+ */
+const STOREY_ORDINALS = ['ersten', 'zweiten', 'dritten', 'vierten', 'fünften'] as const;
+
+/** Where something is: "im Keller", "im ersten Stock", "auf dem Dachboden". */
+export function floorDative(index: number, floors: number): string {
+  if (index <= 0) {
+    return 'im Keller';
+  }
+  if (index === 1) {
+    return 'im Erdgeschoss';
+  }
+  if (index >= floors - 1) {
+    return 'auf dem Dachboden';
+  }
+  return `im ${STOREY_ORDINALS[index - 2] ?? `${index - 1}.`} Stock`;
+}
+
+/** Where something is going: "in den Keller", "ins Erdgeschoss", "auf den Dachboden". */
+export function floorAccusative(index: number, floors: number): string {
+  if (index <= 0) {
+    return 'in den Keller';
+  }
+  if (index === 1) {
+    return 'ins Erdgeschoss';
+  }
+  if (index >= floors - 1) {
+    return 'auf den Dachboden';
+  }
+  return `in den ${STOREY_ORDINALS[index - 2] ?? `${index - 1}.`} Stock`;
+}
+
+/** The standard five-floor archive, for places that do not carry a state. */
+export const FLOOR_NAMES = [0, 1, 2, 3, 4].map((index) => floorName(index, 5));
 
 export const SYSTEM_NAMES: Record<SystemId, string> = {
   generator: 'Generator',
@@ -67,6 +123,7 @@ export const STATE_LABELS = {
   critical: 'kritisch',
   off: 'aus',
   on: 'an',
+  inTransit: 'unterwegs',
 } as const;
 
 export const PANEL_TITLES = {
@@ -77,6 +134,10 @@ export const PANEL_TITLES = {
 } as const;
 
 export const ACTION_LABELS = {
+  relocate: 'Umlagern',
+  burn: 'Verheizen',
+  burnConfirm: 'Verheizen bestätigen',
+  burnFinal: 'Ja. Verbrennen.',
   transmit: 'Senden',
   transmitStop: 'Übertragung stoppen',
   repair: 'Reparieren',
@@ -95,6 +156,7 @@ export const DETAIL_LABELS = {
   intact: 'Intakt',
   sent: 'Gesendet',
   rotted: 'Verrottet',
+  burned: 'Verheizt',
   flooded: 'überflutet',
   dry: 'trocken',
   supply: 'Versorgung',
@@ -102,6 +164,31 @@ export const DETAIL_LABELS = {
   consumption: 'Verbrauch',
   output: 'Leistung',
   none: 'nichts',
+} as const;
+
+export const RELOCATE_HINTS = {
+  preview: (into: string, energy: string, seconds: string) =>
+    `${into[0].toUpperCase()}${into.slice(1)} · ${energy} Energie · ${seconds} unterwegs`,
+  inTransit: (seconds: string) => `Unterwegs. Ankunft in ${seconds}.`,
+  topFloor: 'Höher geht es nicht.',
+  floorFull: (where: string) => `${where[0].toUpperCase()}${where.slice(1)} ist kein Platz mehr.`,
+  notEnoughEnergy: 'Zu wenig Energie zum Tragen.',
+  nothingLeft: 'Nichts Intaktes mehr zu tragen.',
+} as const;
+
+/**
+ * Burning. The wording carries the weight the act deserves — it names what is destroyed
+ * before it names what is gained, and the final press says plainly what it does.
+ */
+export const BURN_HINTS = {
+  preview: (energy: string) => `Gibt ${energy} Energie. Der Rest der Sammlung ist danach fort.`,
+  cost: (energy: string, entropy: string) => `${energy} Energie · Entropie +${entropy}`,
+  warningFirst: (name: string, units: string) =>
+    `${name}: ${units} Einheiten sind noch da. Verheizen vernichtet sie, um Strom zu machen.`,
+  warningFinal:
+    'Das ist endgültig. Nichts davon wird je gesendet, und niemand wird es je wieder lesen.',
+  notPossible: 'Nichts Intaktes mehr zum Verheizen.',
+  inTransit: 'Unterwegs. Erst wenn die Sammlung steht.',
 } as const;
 
 export const TRANSMIT_HINTS = {
@@ -148,7 +235,8 @@ export const LOG = {
   systemLost: (name: string) => `${name} ist ausgefallen. Endgültig.`,
   collectionLost: (name: string, sent: string) =>
     `${name} ist verloren. ${sent} wurden gesendet.`,
-  floorFlooded: (floor: string) => `Das Wasser steht im ${floor}.`,
+  /** Takes the full phrase, e.g. "im ersten Stock" — German needs the case. */
+  floorFlooded: (where: string) => `Das Wasser steht ${where}.`,
   undersupply: (share: string) => `Die Leitungen liefern nur noch ${share}.`,
   supplyRestored: 'Die Versorgung ist wieder vollständig.',
   endedSilence: 'Das Archiv verstummt.',
@@ -158,6 +246,12 @@ export const LOG = {
   transmissionStopped: (name: string) => `Übertragung von ${name} abgebrochen.`,
   transmissionCompleted: (name: string) => `${name} ist vollständig gesendet. Sie ist sicher.`,
   transmitterAnswers: 'Der Sendemast antwortet.',
+
+  relocationStarted: (name: string, into: string) => `${name} wird ${into} getragen.`,
+  relocationFinished: (name: string, where: string) => `${name} steht jetzt ${where}.`,
+  /** The darkest line in the game. It names what was destroyed, and what it bought. */
+  collectionBurned: (name: string, units: string, energy: string) =>
+    `${name} verheizt. ${units} Einheiten verbrannt, ${energy} Energie gewonnen.`,
 } as const;
 
 /** Weather and accidents. Announced ones get a warning line, then the event itself. */
@@ -236,6 +330,28 @@ export const STARTUP_NOTICES = {
   },
 } as const;
 
+export const SCENARIO_LABELS = {
+  title: 'Archiv wählen',
+  hint: 'Ein anderes Haus, dieselben Regeln. Beginnt einen neuen Run.',
+  current: 'Aktuell',
+  daily: 'Tagesarchiv',
+  dailyHint: 'Derselbe Seed für alle, den ganzen Tag. Zum Vergleichen.',
+  start: 'Beginnen',
+  locked: (units: string) => `Öffnet sich nach ${units} gesendeten Einheiten.`,
+} as const;
+
+export const SCENARIO_NAMES = {
+  standard: 'Das Archiv',
+  drought: 'Dürresommer',
+  tower: 'Der Turm',
+} as const;
+
+export const SCENARIO_DESCRIPTIONS = {
+  standard: 'Fünf Etagen. So, wie das Haus gebaut wurde.',
+  drought: 'Wenig Regen, aber ein Generator, der nie ganz reicht. Zeit statt Wasser.',
+  tower: 'Sieben Etagen und weniger Material. Weiter zu tragen, weniger zu reparieren.',
+} as const;
+
 export const SETTINGS_LABELS = {
   title: 'Spielstand',
   export: 'Exportieren',
@@ -307,6 +423,8 @@ export const PROTOCOL_LABELS = {
   reserveHint: 'Protokolle geben Material nie unter diesen Wert aus.',
   depotOff:
     'Das Kustoden-Depot läuft nicht. Ohne Depot führt niemand Protokolle aus.',
+  relocateLocked: (units: string) =>
+    `Umlagern wird für Protokolle freigeschaltet, sobald ${units} Einheiten gesendet wurden.`,
   depotRate: (seconds: string) => `Eine Aktion alle ${seconds}.`,
 } as const;
 
@@ -326,6 +444,7 @@ export const PROTOCOL_ACTION_LABELS = {
   'toggle-off': 'ausschalten',
   'transmit-start': 'senden',
   'transmit-stop': 'Übertragung stoppen',
+  relocate: 'umlagern',
 } as const;
 
 export const CONDITION_UNITS = {
@@ -470,6 +589,7 @@ export const CHRONICLE_LABELS = {
   seedLink: 'Link zu diesem Archiv',
   lostSystem: (name: string) => `${name} ausgefallen`,
   lostCollection: (name: string) => `${name} verloren`,
+  burnedCollection: (name: string) => `${name} verheizt`,
   flooded: (name: string) => `${name} überflutet`,
 } as const;
 

@@ -7,7 +7,16 @@
  * has to produce a friendly reason, never a crash and never a half-loaded run.
  */
 
-import { COLLECTIONS, ENERGY, FLOOR_COUNT, PROTOCOLS } from '../engine/balance';
+import {
+  COLLECTIONS,
+  ENERGY,
+  MAX_FLOORS,
+  PROTOCOLS,
+  SCENARIOS,
+  SCENARIO_IDS,
+  type ScenarioId,
+} from '../engine/balance';
+import { RELOCATE } from '../engine/balance';
 import type { ProtocolAction, ProtocolCondition, ProtocolRule } from '../engine/protocol-types';
 import {
   COLLECTION_IDS,
@@ -176,6 +185,22 @@ export function parseSaveFile(json: string): ReadResult {
  * raw object of version n+1 — never a typed GameState, because the validator runs last.
  */
 const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
+  // v4 gave the archive a scenario, and collections a burned tally and a transit timer.
+  // A run from v3 is the standard house that has neither burned nor carried anything.
+  3: (raw) => {
+    const state = isObject(raw['state']) ? { ...raw['state'] } : {};
+    const collections = isObject(state['collections']) ? { ...state['collections'] } : {};
+    for (const [id, value] of Object.entries(collections)) {
+      if (isObject(value)) {
+        collections[id] = { ...value, burned: 0, transitTicks: 0 };
+      }
+    }
+    return {
+      ...raw,
+      schemaVersion: 4,
+      state: { ...state, schemaVersion: 4, scenarioId: 'standard', collections },
+    };
+  },
   // v3 added weather effects, announcements and the loss timeline. A run from v2 has
   // simply had no events yet; an empty set is exactly right.
   2: (raw) => {
@@ -251,6 +276,13 @@ export function validateState(input: unknown): GameState | null {
     return null;
   }
 
+  const scenarioId = input['scenarioId'];
+  if (typeof scenarioId !== 'string' || !(SCENARIO_IDS as readonly string[]).includes(scenarioId)) {
+    return null;
+  }
+  const scenario = SCENARIOS[scenarioId as ScenarioId];
+  const floors = scenario.floors;
+
   const rngState = input['rngState'];
   const tick = input['tick'];
   const entropy = input['entropy'];
@@ -267,7 +299,7 @@ export function validateState(input: unknown): GameState | null {
     !isInt32(rngState) ||
     !isInRange(tick, 0, Number.MAX_SAFE_INTEGER) ||
     !isInRange(entropy, 0, Number.MAX_SAFE_INTEGER) ||
-    !isInRange(water, 0, FLOOR_COUNT + EPSILON) ||
+    !isInRange(water, 0, floors + EPSILON) ||
     !isInRange(energy, 0, ENERGY.capacity + EPSILON) ||
     !isInRange(material, 0, Number.MAX_SAFE_INTEGER) ||
     !isInRange(supplyRatio, 0, 1 + EPSILON) ||
@@ -279,7 +311,7 @@ export function validateState(input: unknown): GameState | null {
   }
 
   const humidity = input['humidity'];
-  if (!Array.isArray(humidity) || humidity.length !== FLOOR_COUNT) {
+  if (!Array.isArray(humidity) || humidity.length !== floors) {
     return null;
   }
   const humidityValues: number[] = [];
@@ -295,7 +327,7 @@ export function validateState(input: unknown): GameState | null {
     return null;
   }
 
-  const collections = validateCollections(input['collections']);
+  const collections = validateCollections(input['collections'], floors);
   if (!collections) {
     return null;
   }
@@ -313,6 +345,26 @@ export function validateState(input: unknown): GameState | null {
   // "Wird gerade gesendet" while nothing left the building.
   if (transmitting !== null && (systems.transmitter.lost || !systems.transmitter.on)) {
     return null;
+  }
+  // A collection on the stairs is not also going out over the mast.
+  if (transmitting !== null && collections[transmitting as CollectionId].transitTicks > 0) {
+    return null;
+  }
+
+  // No floor holds more than the limit, counting what is on its way up to it.
+  const occupancy = new Map<number, number>();
+  for (const id of COLLECTION_IDS) {
+    const collection = collections[id];
+    if (collection.lost) {
+      continue;
+    }
+    const destination =
+      collection.transitTicks > 0 ? collection.floor + 1 : collection.floor;
+    const count = (occupancy.get(destination) ?? 0) + 1;
+    if (count > RELOCATE.maxPerFloor) {
+      return null;
+    }
+    occupancy.set(destination, count);
   }
 
   const ended = input['ended'];
@@ -335,13 +387,14 @@ export function validateState(input: unknown): GameState | null {
 
   const effects = validateEffects(input['effects']);
   const pending = validatePending(input['pending']);
-  const chronicle = validateChronicle(input['chronicle']);
+  const chronicle = validateChronicle(input['chronicle'], floors);
   if (!effects || !pending || !chronicle) {
     return null;
   }
 
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
+    scenarioId: scenarioId as ScenarioId,
     seed,
     rngState,
     tick,
@@ -411,11 +464,11 @@ function validatePending(input: unknown): PendingEvent[] | null {
   return pending;
 }
 
-function validateChronicle(input: unknown): ChronicleEntry[] | null {
+function validateChronicle(input: unknown, floors: number): ChronicleEntry[] | null {
   // Every system, every collection and every floor appears at most once — the engine
   // records a floor's flooding only the first time. The cap and that rule must agree,
   // or a legitimate run would produce a save this validator refuses.
-  const limit = SYSTEM_IDS.length + COLLECTION_IDS.length + FLOOR_COUNT;
+  const limit = SYSTEM_IDS.length + COLLECTION_IDS.length * 2 + floors;
   if (!Array.isArray(input) || input.length > limit) {
     return null;
   }
@@ -429,13 +482,16 @@ function validateChronicle(input: unknown): ChronicleEntry[] | null {
     const id = raw['id'];
     if (
       typeof id !== 'string' ||
-      (kind !== 'system-lost' && kind !== 'collection-lost' && kind !== 'floor-flooded')
+      (kind !== 'system-lost' &&
+        kind !== 'collection-lost' &&
+        kind !== 'floor-flooded' &&
+        kind !== 'collection-burned')
     ) {
       return null;
     }
     // The id has to name something in this archive; the chronicle and the share text
     // render it straight through, so "banana ausgefallen" must be impossible.
-    if (!namesSomething(kind, id)) {
+    if (!namesSomething(kind, id, floors)) {
       return null;
     }
     const key = `${kind}:${id}`;
@@ -448,15 +504,16 @@ function validateChronicle(input: unknown): ChronicleEntry[] | null {
   return entries;
 }
 
-function namesSomething(kind: ChronicleEntry['kind'], id: string): boolean {
+function namesSomething(kind: ChronicleEntry['kind'], id: string, floors: number): boolean {
   switch (kind) {
     case 'system-lost':
       return isSystemId(id);
     case 'collection-lost':
+    case 'collection-burned':
       return isCollectionId(id);
     case 'floor-flooded': {
       const floor = Number(id);
-      return Number.isInteger(floor) && floor >= 0 && floor < FLOOR_COUNT && String(floor) === id;
+      return Number.isInteger(floor) && floor >= 0 && floor < floors && String(floor) === id;
     }
   }
 }
@@ -523,7 +580,9 @@ function validateCondition(input: unknown): ProtocolCondition | null {
       return { kind: 'energy-above', value };
     case 'humidity-above': {
       const floor = input['floor'];
-      return isInRange(floor, 0, FLOOR_COUNT - 1) && Number.isInteger(floor)
+      // A rule may name any floor a scenario can have; the evaluator reads a missing
+      // one as zero humidity rather than crashing.
+      return isInRange(floor, 0, MAX_FLOORS - 1) && Number.isInteger(floor)
         ? { kind: 'humidity-above', floor, value }
         : null;
     }
@@ -547,6 +606,9 @@ function validateProtocolAction(input: unknown): ProtocolAction | null {
   }
   if (input['type'] === 'transmit-start' && isCollectionId(input['collectionId'])) {
     return { type: 'transmit-start', collectionId: input['collectionId'] };
+  }
+  if (input['type'] === 'relocate' && isCollectionId(input['collectionId'])) {
+    return { type: 'relocate', collectionId: input['collectionId'] };
   }
   if (!isSystemId(input['systemId'])) {
     return null;
@@ -599,7 +661,7 @@ function validateSystems(input: unknown): GameState['systems'] | null {
   return systems;
 }
 
-function validateCollections(input: unknown): GameState['collections'] | null {
+function validateCollections(input: unknown, floors: number): GameState['collections'] | null {
   if (!isObject(input)) {
     return null;
   }
@@ -613,19 +675,28 @@ function validateCollections(input: unknown): GameState['collections'] | null {
     const intact = raw['intact'];
     const sent = raw['sent'];
     const rotted = raw['rotted'];
+    const burned = raw['burned'];
+    const transitTicks = raw['transitTicks'];
     const lost = raw['lost'];
     if (
-      !isInRange(floor, 0, FLOOR_COUNT - 1) ||
+      !isInRange(floor, 0, floors - 1) ||
       !Number.isInteger(floor) ||
       !isInRange(intact, 0, COLLECTIONS.unitsEach + EPSILON) ||
       !isInRange(sent, 0, COLLECTIONS.unitsEach + EPSILON) ||
       !isInRange(rotted, 0, COLLECTIONS.unitsEach + EPSILON) ||
+      !isInRange(burned, 0, COLLECTIONS.unitsEach + EPSILON) ||
+      !isInRange(transitTicks, 0, RELOCATE.transitSeconds) ||
+      !Number.isInteger(transitTicks) ||
       typeof lost !== 'boolean'
     ) {
       return null;
     }
     // Units cannot be invented or lost in bookkeeping.
-    if (Math.abs(intact + sent + rotted - COLLECTIONS.unitsEach) > 0.01) {
+    if (Math.abs(intact + sent + rotted + burned - COLLECTIONS.unitsEach) > 0.01) {
+      return null;
+    }
+    // A collection already on the top floor cannot be on its way anywhere.
+    if (transitTicks > 0 && floor >= floors - 1) {
       return null;
     }
     // A lost collection holds nothing. Otherwise its units would sit there untouched —
@@ -635,10 +706,12 @@ function validateCollections(input: unknown): GameState['collections'] | null {
       return null;
     }
     collections[id as CollectionId] = {
-      floor: floor as GameState['collections'][CollectionId]['floor'],
+      floor,
       intact,
       sent,
       rotted,
+      burned,
+      transitTicks,
       lost,
     };
   }

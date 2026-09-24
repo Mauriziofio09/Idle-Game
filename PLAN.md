@@ -1,7 +1,7 @@
 # PLAN.md — ENTROPIE · Das letzte Archiv
 
 Arbeitsplan zu `prompt.md`. Visuelle Quelle: `styles.md` (schreibgeschützt).
-Status: **M0–M5 fertig · wartet auf Feedback vor M6.**
+Status: **M0–M6 fertig · wartet auf Feedback vor M7.**
 
 ---
 
@@ -296,11 +296,11 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Vermächtnis + 24 Lore-Fragmente + „Neues Archiv"
 
 ### M6 · Tiefe (SOLL)
-- [ ] Umlagern (30 s unterwegs, max. 3 pro Etage)
-- [ ] Verheizen (zweistufige Bestätigung, eigener Log-Eintrag, inszeniert)
+- [x] Umlagern (30 s unterwegs, max. 3 pro Etage)
+- [x] Verheizen (zweistufige Bestätigung, eigener Log-Eintrag, inszeniert)
 - [x] Materialreserve für Protokolle
-- [ ] Szenarien („Dürresommer", „Der Turm")
-- [ ] Tagesarchiv (Seed aus Datum)
+- [x] Szenarien („Dürresommer", „Der Turm")
+- [x] Tagesarchiv (Seed aus Datum)
 
 ### M7 · Feel & Politur
 - [ ] **`styles.md` erneut lesen**
@@ -763,3 +763,86 @@ statt etwas anderes zu behaupten. Dazu waren zwei Zusicherungen im Teilen-Test l
 
 **Alle neuen Korrekturen sind mutationsgeprüft**: Nimmt man je eine heraus, schlägt genau
 der zugehörige Test fehl.
+
+---
+
+## 14 · Stand nach M6
+
+Gebaut: Umlagern und Verheizen als Aktionen, Szenarien als Datensatz (`SCENARIOS`),
+Tagesarchiv, Szenario-Panel, Schema 4 mit Migration 3→4, Umlagern als Protokoll-Aktion
+(freigeschaltet ab 100 gesendeten Einheiten).
+
+**Entscheidungen:**
+26. **Eine Sammlung unterwegs verrottet weiter, wo sie stand.** `prompt.md` 5.7 sagt nur
+    „ist währenddessen unterwegs". Würde sie währenddessen nicht verfallen, wäre Umlagern
+    eine Pause-Taste für den Verfall — das widerspricht Säule 1. Ein Test vergleicht eine
+    getragene mit einer stehenden Sammlung und verlangt denselben Verlust.
+27. **Verheiztes zählt getrennt von Verrottetem.** Ein neues Feld `burned` statt es in
+    `rotted` zu verstecken: Die Chronik soll zeigen, was der Spieler selbst vernichtet hat.
+    Die Bilanz lautet jetzt `intakt + gesendet + verrottet + verheizt = 100`.
+28. **Die Etagenzahl gehört dem Szenario, nicht der Konstante.** „Der Turm" hat sieben
+    Etagen, also ist `FLOOR_COUNT` nur noch der Standardwert; Feuchte-Array, Wassergrenze,
+    Dach- und Mast-Etage, Querschnitt und Validator lesen die Zahl aus dem Zustand.
+    `MAX_FLOORS` begrenzt, was ein Szenario überhaupt bauen darf.
+29. **Szenarien ändern Bedingungen, nie Regeln.** Alles, was der Spieler gelernt hat, gilt
+    weiter — nur Regen, Generator, Material und Grundriss sind andere.
+
+**Im Browser nachgewiesen:** Der Turm baut sieben Etagen mit korrekten Namen und 30
+Material · Umlagern zeigt „Ins Erdgeschoss · 15 Energie · 30 s unterwegs", der Chip sagt
+„unterwegs", der Log meldet Aufbruch und Ankunft · Verheizen braucht zwei bewusste Drücke
+und meldet „Sprachen der Welt verheizt. 100 Einheiten verbrannt, 50 Energie gewonnen.",
+Energie 65 → 115 · Konsole ohne Fehler.
+
+**Ein Sprachfehler, den erst der Browser zeigte — und der seit M2 drinsteckte:**
+Deutsche Fälle wurden aus Präposition und Nominativ zusammengesetzt, also „in den
+Erdgeschoss", „steht jetzt im Erster Stock" und, seit M2 unbemerkt, „Das Wasser steht im
+Erster Stock." Es gibt jetzt `floorDative` und `floorAccusative`, die die ganze Wendung
+liefern („im Keller", „ins Erdgeschoss", „auf dem Dachboden"), mit Tests auf die Sätze selbst.
+
+### Nachträge aus der M6-Review
+
+Fünfzehn Punkte, drei davon schwer. Behoben:
+
+1. **[schwer] Mehr als drei Sammlungen konnten auf einer Etage landen.** Die Prüfung zählte
+   nur, was schon dort *stand* — wer bereits auf dem Weg dorthin war, war unsichtbar. Drei
+   Umzüge zur selben Etage ließen sich im selben Moment starten und wurden alle erlaubt
+   (gemessen: vier auf einer Etage). `collectionsOn` zählt jetzt auch, was unterwegs ist:
+   Eine Etage, die gleich voll sein wird, ist voll.
+2. **[schwer] Der Log nannte den Dachboden in jedem Fünf-Etagen-Archiv falsch.** Er bekam
+   `MAX_FLOORS` statt der Etagenzahl des Hauses und schrieb deshalb „Das Wasser steht im
+   dritten Stock", wo das Detail-Panel „Dachboden" sagte — dieselbe Etage, zwei Namen.
+   Ein Domain-Event trägt keine Hausgröße, also bekommt `describe` sie jetzt als Parameter.
+3. **[schwer] Eine verheizte Sammlung erschien in der Chronik als überflutete Etage** —
+   „maps überflutet", mit englischer ID. Der Teilen-Text war bereits korrigiert, die Chronik
+   nicht; dieselbe Klasse wie der „banana ausgefallen"-Fund aus M5.
+4. **[mittel] Etwas, das auf der Treppe verrottete, „kam trotzdem an."** Der Ankunftsschritt
+   übersprang nur `transitTicks <= 0`, nicht `lost`. Der Log meldete erst den Verlust und
+   dreißig Sekunden später die Ankunft.
+5. **[mittel] Der Protokoll-Editor kannte nur fünf Etagen** — im Turm ließ sich für die
+   Etagen 5 und 6 gar keine Feuchte-Regel schreiben, und der Pegel war auf 17,5 m geklemmt,
+   während das Wasser 24,5 m erreicht.
+6. **[mittel] Ein Seed-Link öffnete das falsche Haus.** Er trug nur den Seed, und die
+   Gegenseite startete ihn im Standardarchiv. Der Link trägt jetzt `&haus=`.
+7. **[mittel] Das Tagesarchiv war nicht für alle gleich** — es lief im Haus, in dem der
+   Spieler gerade war. Es ist jetzt immer das Standardarchiv.
+8. **[mittel] Szenarien waren nicht freigeschaltet.** `prompt.md` 5.12 führt sie unter den
+   Freischaltungen; es gibt jetzt Schwellen (Dürresommer 200, Der Turm 400 Einheiten).
+9. **[mittel] Der Fokus fiel im Verheiz-Ablauf dreimal und im Szenario-Panel zweimal auf
+   `<body>`** — zum fünften Mal dieselbe Klasse. Behoben, plus `role="status"` auf der
+   Bestätigung.
+10. **[gering] Drei Validator-Lücken**: ein gebrochener Transit-Zähler, der nie null
+    erreicht und die Sammlung für immer festsetzt · mehr Sammlungen auf einer Etage, als
+    erlaubt ist · eine Sammlung gleichzeitig auf der Treppe und auf Sendung.
+11. **[gering] Umlagern war nur in der UI gesperrt.** Ein importierter Spielstand hätte die
+    Aktion vor der Freischaltung ausgeführt; Regeln werden jetzt beim Laden gefiltert.
+12. **[gering] „Entropie +" stand als Literal im Template**, und die Verheizt-Zeile wurde
+    über einen Vergleich mit `'0 %'` ein- und ausgeblendet.
+
+**Ein Test konnte nicht fehlschlagen** (mutationsbelegt): „Dürresommer hat weniger Energie"
+verglich beide Archive nach 300 Ticks, wo beide exakt bei 0 stehen — die Zusicherung war
+`0 <= 0`. Sie misst jetzt die Generatorleistung selbst. Dazu fehlte ein Chunk-Invarianz-Test
+unter einem anderen Szenario; er ist ergänzt.
+
+30. **Ein Seed-Link öffnet auch ein noch nicht freigeschaltetes Haus.** `prompt.md` 5.11
+    verlangt „exakt dasselbe Archiv"; die Freischaltungen aus 5.12 regeln, was man *wählen*
+    kann, nicht was man gezeigt bekommen darf. Ein Link ist eine Einladung.

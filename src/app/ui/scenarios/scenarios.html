@@ -1,0 +1,42 @@
+<p class="hint">{{ labels.hint }}</p>
+
+<ul #list class="list">
+  @for (scenario of scenarios(); track scenario.id) {
+    <li>
+      <div class="head">
+        <span class="name">{{ scenario.name }}</span>
+        @if (scenario.isCurrent) {
+          <span class="hint">{{ labels.current }}</span>
+        }
+      </div>
+      <p class="hint">{{ scenario.description }}</p>
+      @if (scenario.lockedHint; as locked) {
+        <p class="hint">{{ locked }}</p>
+      }
+      <button
+        type="button"
+        class="small"
+        [disabled]="!scenario.unlocked"
+        (click)="ask(scenario.id)"
+      >
+        {{ labels.start }}
+      </button>
+    </li>
+  }
+
+  <li>
+    <div class="head">
+      <span class="name">{{ labels.daily }}</span>
+    </div>
+    <p class="hint">{{ labels.dailyHint }}</p>
+    <button type="button" class="small" (click)="askDaily()">{{ labels.start }}</button>
+  </li>
+</ul>
+
+@if (pending() || pendingDaily()) {
+  <p class="warning" role="status">{{ settingsLabels.resetWarning }}</p>
+  <app-button #confirmButton variant="primary" (pressed)="start()">
+    {{ settingsLabels.resetConfirm }}
+  </app-button>
+  <app-button variant="secondary" (pressed)="cancel()">{{ settingsLabels.cancel }}</app-button>
+}

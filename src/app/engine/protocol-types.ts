@@ -14,7 +14,11 @@ import type { CollectionId, SystemId } from './state';
  */
 export type ProtocolAction = Extract<
   Action,
-  { type: 'repair' } | { type: 'toggle' } | { type: 'transmit-start' } | { type: 'transmit-stop' }
+  | { type: 'repair' }
+  | { type: 'toggle' }
+  | { type: 'transmit-start' }
+  | { type: 'transmit-stop' }
+  | { type: 'relocate' }
 >;
 
 export type ProtocolCondition =

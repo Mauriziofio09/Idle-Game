@@ -15,17 +15,35 @@ import {
   ACTION_LABELS,
   COLLECTION_NAMES,
   DETAIL_LABELS,
-  FLOOR_NAMES,
+  floorAccusative,
+  floorDative,
+  floorName,
   PANEL_TITLES,
+  BURN_HINTS,
+  RELOCATE_HINTS,
   STATE_LABELS,
   SYSTEM_NAMES,
   TRANSMIT_HINTS,
 } from '../../content/de';
-import { ENTROPY, REPAIR, SYSTEMS, TRANSMIT } from '../../engine/balance';
+import { ENTROPY, RELOCATE, REPAIR, SYSTEMS, TRANSMIT } from '../../engine/balance';
+import { burnYield } from '../../engine/actions';
 import { GameStore } from '../../game/game-store';
-import { systemFloor, type CollectionId, type SystemId } from '../../engine/state';
+import {
+  collectionsOn,
+  floorCount,
+  systemFloor,
+  topFloor,
+  type CollectionId,
+  type SystemId,
+} from '../../engine/state';
 import type { Selection } from '../../game/game-store';
-import { formatInteger, formatPerSecond, formatPercent, formatResource } from '../../format';
+import {
+  formatInteger,
+  formatPerSecond,
+  formatPercent,
+  formatResource,
+  formatSeconds,
+} from '../../format';
 import { Button } from '../kit/button';
 import { Meter } from '../kit/meter';
 
@@ -50,6 +68,7 @@ export class DetailPanel {
   protected readonly actionLabels = ACTION_LABELS;
   protected readonly hints = ACTION_HINTS;
   protected readonly transmitHints = TRANSMIT_HINTS;
+  protected readonly burnHints = BURN_HINTS;
   protected readonly labels = DETAIL_LABELS;
   protected readonly stateLabels = STATE_LABELS;
 
@@ -65,8 +84,15 @@ export class DetailPanel {
     computation: () => null,
   });
 
+  /** Burning takes two deliberate presses; this holds how far the player has gone. */
+  protected readonly burnStep = linkedSignal<Selection, 0 | 1 | 2>({
+    source: this.selection,
+    computation: () => 0,
+  });
+
   private readonly heading = viewChild<ElementRef<HTMLElement>>('heading');
   private readonly confirmButton = viewChild<Button>('confirmButton');
+  private readonly burnButton = viewChild<Button>('burnButton');
 
   protected readonly system = computed(() => {
     const selection = this.selection();
@@ -82,7 +108,7 @@ export class DetailPanel {
     return {
       id,
       name: SYSTEM_NAMES[id],
-      floor: FLOOR_NAMES[systemFloor(id)],
+      floor: floorName(systemFloor(state, id), floorCount(state)),
       integrity: system.integrity,
       readout: formatPercent(system.integrity),
       on: system.on,
@@ -113,19 +139,37 @@ export class DetailPanel {
       return null;
     }
     const id: CollectionId = selection.id;
-    const collection = this.store.state().collections[id];
+    const state = this.store.state();
+    const collection = state.collections[id];
     return {
       id,
       name: COLLECTION_NAMES[id],
-      floor: FLOOR_NAMES[collection.floor],
+      floor: floorName(collection.floor, floorCount(state)),
       intact: collection.intact,
       readout: formatPercent(collection.intact),
       sent: formatPercent(collection.sent),
       rotted: formatPercent(collection.rotted),
+      burnedShare: formatPercent(collection.burned),
+      hasBurned: collection.burned > 0,
       lost: collection.lost,
       transmitting: this.store.state().transmitting === id,
       canTransmit: this.store.canApply({ type: 'transmit-start', collectionId: id }),
       transmitHint: this.transmitHintFor(id),
+      inTransit: collection.transitTicks > 0,
+      canRelocate: this.store.canApply({ type: 'relocate', collectionId: id }),
+      relocateHint: this.relocateHintFor(id),
+      canBurn: this.store.canApply({ type: 'burn', collectionId: id }),
+      burnPreview: BURN_HINTS.preview(formatResource(burnYield(state, id))),
+      burnHint: this.burnHintFor(id),
+      burnWarningFirst: BURN_HINTS.warningFirst(
+        COLLECTION_NAMES[id],
+        formatResource(collection.intact),
+      ),
+      burnWarningFinal: BURN_HINTS.warningFinal,
+      burnCost: BURN_HINTS.cost(
+        formatResource(burnYield(state, id)),
+        formatResource(ENTROPY.perBurn),
+      ),
       rateHint: TRANSMIT_HINTS.rate(
         formatResource(TRANSMIT.unitsPerSecond),
         formatResource(TRANSMIT.energyPerSecond),
@@ -152,6 +196,73 @@ export class DetailPanel {
     return TRANSMIT_HINTS.mastWears;
   }
 
+  /** Says where it would go and what it costs, or why it cannot go anywhere. */
+  private relocateHintFor(id: CollectionId): string {
+    const state = this.store.state();
+    const collection = state.collections[id];
+    if (collection.transitTicks > 0) {
+      return RELOCATE_HINTS.inTransit(formatSeconds(collection.transitTicks));
+    }
+    if (collection.lost || collection.intact <= 0) {
+      return RELOCATE_HINTS.nothingLeft;
+    }
+    const target = collection.floor + 1;
+    if (target > topFloor(state)) {
+      return RELOCATE_HINTS.topFloor;
+    }
+    if (collectionsOn(state, target) >= RELOCATE.maxPerFloor) {
+      return RELOCATE_HINTS.floorFull(floorDative(target, floorCount(state)));
+    }
+    if (state.energy < RELOCATE.energyCost) {
+      return RELOCATE_HINTS.notEnoughEnergy;
+    }
+    return RELOCATE_HINTS.preview(
+      floorAccusative(target, floorCount(state)),
+      formatResource(RELOCATE.energyCost),
+      formatSeconds(RELOCATE.transitSeconds),
+    );
+  }
+
+  /** Says why burning is unavailable, rather than blaming an empty collection. */
+  private burnHintFor(id: CollectionId): string {
+    const state = this.store.state();
+    const collection = state.collections[id];
+    if (collection.transitTicks > 0) {
+      return BURN_HINTS.inTransit;
+    }
+    if (collection.lost || collection.intact <= 0) {
+      return BURN_HINTS.notPossible;
+    }
+    return BURN_HINTS.preview(formatResource(burnYield(state, id)));
+  }
+
+  protected relocate(id: CollectionId): void {
+    this.store.dispatch({ type: 'relocate', collectionId: id });
+  }
+
+  protected askBurn(): void {
+    this.burnStep.set(1);
+    // Every step replaces the button just pressed; without this the player is dropped
+    // onto <body> three times during the heaviest decision in the game.
+    this.focusAfterRender(() => this.burnButton()?.focus());
+  }
+
+  protected confirmBurn(): void {
+    this.burnStep.set(2);
+    this.focusAfterRender(() => this.burnButton()?.focus());
+  }
+
+  protected cancelBurn(): void {
+    this.burnStep.set(0);
+    this.focusAfterRender(() => this.burnButton()?.focus());
+  }
+
+  protected burn(id: CollectionId): void {
+    this.store.dispatch({ type: 'burn', collectionId: id });
+    this.burnStep.set(0);
+    this.focusAfterRender(() => this.heading()?.nativeElement.focus());
+  }
+
   protected transmit(id: CollectionId): void {
     this.store.dispatch({ type: 'transmit-start', collectionId: id });
   }
@@ -174,7 +285,7 @@ export class DetailPanel {
     return {
       index,
       indexLabel: formatInteger(index),
-      name: FLOOR_NAMES[index],
+      name: floorName(index, floorCount(state)),
       humidity: state.humidity[index],
       humidityReadout: formatPercent(state.humidity[index]),
       flooded: this.store.floorIsFlooded(index),

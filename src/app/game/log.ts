@@ -5,11 +5,18 @@
  * stays language-free; swapping content/de.ts for another file is all a translation needs.
  */
 
-import { COLLECTION_NAMES, EVENT_LOG, FLOOR_NAMES, LOG, SYSTEM_NAMES } from '../content/de';
+import {
+  COLLECTION_NAMES,
+  EVENT_LOG,
+  LOG,
+  SYSTEM_NAMES,
+  floorAccusative,
+  floorDative,
+} from '../content/de';
 import type { DomainEvent } from '../engine/domain-events';
 import type { EventKind } from '../engine/state';
 import { EVENTS } from '../engine/balance';
-import { formatAmount, formatPercent, formatSeconds } from '../format';
+import { formatPercent, formatResource, formatSeconds } from '../format';
 
 export type LogKind = 'note' | 'loss' | 'end';
 
@@ -26,7 +33,14 @@ export interface LogEntry {
  * Returns the line for an event, or null for events that deserve no line
  * (rejections are prevented by the UI, so they would only be noise).
  */
-export function describe(event: DomainEvent): { text: string; kind: LogKind } | null {
+/**
+ * @param floors how many floors this archive has. A domain event carries no layout, and
+ * guessing the maximum would call the attic of a five-floor house "the third storey".
+ */
+export function describe(
+  event: DomainEvent,
+  floors: number,
+): { text: string; kind: LogKind } | null {
   switch (event.type) {
     case 'system-repaired':
       return {
@@ -43,7 +57,7 @@ export function describe(event: DomainEvent): { text: string; kind: LogKind } | 
     case 'system-dismantled':
       return {
         kind: 'loss',
-        text: LOG.systemDismantled(SYSTEM_NAMES[event.systemId], formatAmount(event.material)),
+        text: LOG.systemDismantled(SYSTEM_NAMES[event.systemId], formatResource(event.material)),
       };
     case 'system-lost':
       return { kind: 'loss', text: LOG.systemLost(SYSTEM_NAMES[event.systemId]) };
@@ -53,7 +67,7 @@ export function describe(event: DomainEvent): { text: string; kind: LogKind } | 
         text: LOG.collectionLost(COLLECTION_NAMES[event.collectionId], formatPercent(event.sent)),
       };
     case 'floor-flooded':
-      return { kind: 'loss', text: LOG.floorFlooded(FLOOR_NAMES[event.floor]) };
+      return { kind: 'loss', text: LOG.floorFlooded(floorDative(event.floor, floors)) };
     case 'undersupply-changed':
       return {
         kind: 'note',
@@ -78,6 +92,32 @@ export function describe(event: DomainEvent): { text: string; kind: LogKind } | 
       return {
         kind: 'note',
         text: LOG.transmissionCompleted(COLLECTION_NAMES[event.collectionId]),
+      };
+
+    case 'relocation-started':
+      return {
+        kind: 'note',
+        text: LOG.relocationStarted(
+          COLLECTION_NAMES[event.collectionId],
+          floorAccusative(event.toFloor, floors),
+        ),
+      };
+    case 'relocation-finished':
+      return {
+        kind: 'note',
+        text: LOG.relocationFinished(
+          COLLECTION_NAMES[event.collectionId],
+          floorDative(event.toFloor, floors),
+        ),
+      };
+    case 'collection-burned':
+      return {
+        kind: 'loss',
+        text: LOG.collectionBurned(
+          COLLECTION_NAMES[event.collectionId],
+          formatResource(event.units),
+          formatResource(event.energy),
+        ),
       };
 
     case 'event-announced': {
@@ -120,7 +160,7 @@ function describeStrike(event: Extract<DomainEvent, { type: 'event-struck' }>): 
         event.systemId ? SYSTEM_NAMES[event.systemId] : '',
       );
     case 'driftwood':
-      return EVENT_LOG.struck.driftwood(formatAmount(event.amount ?? 0));
+      return EVENT_LOG.struck.driftwood(formatResource(event.amount ?? 0));
     case 'mould':
       return EVENT_LOG.struck.mould(
         event.collectionId ? COLLECTION_NAMES[event.collectionId] : '',

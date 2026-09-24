@@ -16,7 +16,11 @@ export type ActionRejection =
   | 'already-at-full-integrity'
   | 'run-ended'
   | 'nothing-to-transmit'
-  | 'transmitter-unavailable';
+  | 'transmitter-unavailable'
+  | 'already-in-transit'
+  | 'no-floor-above'
+  | 'floor-is-full'
+  | 'nothing-to-burn';
 
 export type DomainEvent =
   | { type: 'system-repaired'; tick: number; systemId: SystemId; gain: number; cost: number }
@@ -28,6 +32,15 @@ export type DomainEvent =
   | { type: 'transmission-started'; tick: number; collectionId: CollectionId }
   | { type: 'transmission-stopped'; tick: number; collectionId: CollectionId }
   | { type: 'transmission-completed'; tick: number; collectionId: CollectionId }
+  | { type: 'relocation-started'; tick: number; collectionId: CollectionId; toFloor: number }
+  | { type: 'relocation-finished'; tick: number; collectionId: CollectionId; toFloor: number }
+  | {
+      type: 'collection-burned';
+      tick: number;
+      collectionId: CollectionId;
+      units: number;
+      energy: number;
+    }
   | { type: 'undersupply-changed'; tick: number; ratio: number }
   | { type: 'protocol-fired'; tick: number; ruleId: string; action: ProtocolAction }
   | { type: 'event-announced'; tick: number; kind: EventKind }

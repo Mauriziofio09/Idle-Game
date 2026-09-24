@@ -3,6 +3,9 @@ import { buildChronicle } from '../engine/chronicle';
 import { createInitialState } from '../engine/state';
 import { bar, seedLink, shareText } from './share';
 
+/** The standard archive, which every fixture here plays in. */
+const FLOORS = 5;
+
 describe('the shareable chronicle', () => {
   const chronicleOf = () => {
     const state = createInitialState('4F2A');
@@ -27,7 +30,7 @@ describe('the shareable chronicle', () => {
   });
 
   it('reads as the record prompt.md section 5.11 sketches', () => {
-    const text = shareText(chronicleOf());
+    const text = shareText(chronicleOf(), FLOORS);
 
     expect(text).toContain('ENTROPIE · Archiv #4F2A');
     expect(text).toContain('02:46:39');
@@ -38,7 +41,7 @@ describe('the shareable chronicle', () => {
   });
 
   it('lines the bars up in a column', () => {
-    const lines = shareText(chronicleOf()).split('\n');
+    const lines = shareText(chronicleOf(), FLOORS).split('\n');
     const barLines = lines.filter((line) => line.includes('▱') || line.includes('▰'));
     expect(barLines.length).toBe(6);
 
@@ -47,7 +50,7 @@ describe('the shareable chronicle', () => {
   });
 
   it('stays plain: a record of a run, not an advertisement', () => {
-    const text = shareText(chronicleOf());
+    const text = shareText(chronicleOf(), FLOORS);
 
     // No exclamation anywhere — prompt.md section 4 rules them out of every game text.
     expect(text).not.toContain('!');
@@ -66,13 +69,17 @@ describe('the shareable chronicle', () => {
   });
 
   it('builds a link that starts the very same archive', () => {
-    expect(seedLink('4F2A', 'https://example.org', '/entropie/')).toBe(
+    expect(seedLink('4F2A', 'standard', 'https://example.org', '/entropie/')).toBe(
       'https://example.org/entropie/?archiv=4F2A',
+    );
+    // A different house is a different game, so the link has to say which one.
+    expect(seedLink('4F2A', 'tower', 'https://example.org', '/entropie/')).toBe(
+      'https://example.org/entropie/?archiv=4F2A&haus=tower',
     );
   });
 
   it('says nothing about a loss when nothing has been lost', () => {
     const state = createInitialState('9B01');
-    expect(shareText(buildChronicle(state))).not.toContain('Zuletzt fiel');
+    expect(shareText(buildChronicle(state), FLOORS)).not.toContain('Zuletzt fiel');
   });
 });

@@ -14,19 +14,25 @@ import {
   COLLECTION_NAMES,
   CONDITION_LABELS,
   CONDITION_UNITS,
-  FLOOR_NAMES,
+  floorName,
   PROTOCOL_ACTION_LABELS,
   PROTOCOL_LABELS,
   SYSTEM_NAMES,
 } from '../../content/de';
-import { METRES_PER_FLOOR, PROTOCOLS, WATER } from '../../engine/balance';
+import { LEGACY, METRES_PER_FLOOR, PROTOCOLS } from '../../engine/balance';
 import type { ProtocolCondition, ProtocolRule } from '../../engine/protocol-types';
 import { COLLECTION_IDS, SYSTEM_IDS, type CollectionId, type SystemId } from '../../engine/state';
 import { GameStore } from '../../game/game-store';
 import { formatInteger, formatSeconds } from '../../format';
 
 type ConditionKind = ProtocolCondition['kind'];
-type ActionChoice = 'repair' | 'toggle-on' | 'toggle-off' | 'transmit-start' | 'transmit-stop';
+type ActionChoice =
+  | 'repair'
+  | 'toggle-on'
+  | 'toggle-off'
+  | 'transmit-start'
+  | 'transmit-stop'
+  | 'relocate';
 
 /** Which target an action needs: a system, a collection, or nothing at all. */
 const ACTION_TARGET: Record<ActionChoice, 'system' | 'collection' | 'none'> = {
@@ -35,6 +41,7 @@ const ACTION_TARGET: Record<ActionChoice, 'system' | 'collection' | 'none'> = {
   'toggle-off': 'system',
   'transmit-start': 'collection',
   'transmit-stop': 'none',
+  relocate: 'collection',
 };
 
 /** Which extra dropdown a condition needs, if any. */
@@ -82,19 +89,36 @@ export class Protocols {
   protected readonly actionLabels = PROTOCOL_ACTION_LABELS;
 
   protected readonly conditionKinds = Object.keys(CONDITION_LABELS) as ConditionKind[];
-  protected readonly actionChoices: ActionChoice[] = [
-    'repair',
-    'toggle-on',
-    'toggle-off',
-    'transmit-start',
-    'transmit-stop',
-  ];
+  /** Relocation joins the list only once the legacy has unlocked it. */
+  protected readonly actionChoices = computed<ActionChoice[]>(() => {
+    const base: ActionChoice[] = [
+      'repair',
+      'toggle-on',
+      'toggle-off',
+      'transmit-start',
+      'transmit-stop',
+    ];
+    return this.store.relocateUnlocked() ? [...base, 'relocate'] : base;
+  });
+
+  protected readonly relocateLockedHint = computed(() =>
+    this.store.relocateUnlocked()
+      ? null
+      : PROTOCOL_LABELS.relocateLocked(formatInteger(LEGACY.relocateThreshold)),
+  );
   protected readonly systems = SYSTEM_IDS.map((id) => ({ id, name: SYSTEM_NAMES[id] }));
   protected readonly collections = COLLECTION_IDS.map((id) => ({
     id,
     name: COLLECTION_NAMES[id],
   }));
-  protected readonly floors = FLOOR_NAMES.map((name, index) => ({ index, name }));
+  /** The floors this archive actually has — the tower reaches higher than five. */
+  protected readonly floors = computed(() => {
+    const count = this.store.floorCount();
+    return Array.from({ length: count }, (_, index) => ({
+      index,
+      name: floorName(index, count),
+    }));
+  });
 
   protected readonly canAdd = this.store.canAddProtocol;
   protected readonly depotWorking = this.store.depotWorking;
@@ -240,7 +264,8 @@ export class Protocols {
     // The water level is typed in metres and kept in floors.
     const stored =
       rule.condition.kind === 'water-above'
-        ? Math.max(0, Math.min(WATER.max, value / METRES_PER_FLOOR))
+        ? // The ceiling is this house's own height, not the standard five floors.
+          Math.max(0, Math.min(this.store.floorCount(), value / METRES_PER_FLOOR))
         : Math.max(0, value);
     this.store.updateProtocol(rule.id, { condition: { ...rule.condition, value: stored } });
 
@@ -285,6 +310,8 @@ export class Protocols {
         return 'transmit-start';
       case 'transmit-stop':
         return 'transmit-stop';
+      case 'relocate':
+        return 'relocate';
       case 'toggle':
         return rule.action.on ? 'toggle-on' : 'toggle-off';
     }
@@ -300,6 +327,8 @@ export class Protocols {
         return { type: 'repair', systemId };
       case 'transmit-start':
         return { type: 'transmit-start', collectionId };
+      case 'relocate':
+        return { type: 'relocate', collectionId };
       case 'transmit-stop':
         return { type: 'transmit-stop' };
       default:

@@ -1,5 +1,14 @@
 import { LEGACY } from '../engine/balance';
-import { CLOSING_SENTENCES, LORE, SYSTEM_NAMES, COLLECTION_NAMES } from './de';
+import {
+  CLOSING_SENTENCES,
+  COLLECTION_NAMES,
+  LOG,
+  LORE,
+  SYSTEM_NAMES,
+  floorAccusative,
+  floorDative,
+  floorName,
+} from './de';
 import { SYSTEM_IDS, COLLECTION_IDS } from '../engine/state';
 
 /**
@@ -67,5 +76,59 @@ describe('the voice', () => {
     for (const id of COLLECTION_IDS) {
       expect(COLLECTION_NAMES[id]?.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('floor names in German cases', () => {
+  it('names every floor of the five-floor archive', () => {
+    expect([0, 1, 2, 3, 4].map((i) => floorName(i, 5))).toEqual([
+      'Keller',
+      'Erdgeschoss',
+      'Erster Stock',
+      'Zweiter Stock',
+      'Dachboden',
+    ]);
+  });
+
+  it('names every floor of the seven-floor tower', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map((i) => floorName(i, 7))).toEqual([
+      'Keller',
+      'Erdgeschoss',
+      'Erster Stock',
+      'Zweiter Stock',
+      'Dritter Stock',
+      'Vierter Stock',
+      'Dachboden',
+    ]);
+  });
+
+  it('declines where something is, instead of gluing a preposition to a name', () => {
+    // "im Erster Stock" and "im Dachboden" are what naive composition produces.
+    expect([0, 1, 2, 4].map((i) => floorDative(i, 5))).toEqual([
+      'im Keller',
+      'im Erdgeschoss',
+      'im ersten Stock',
+      'auf dem Dachboden',
+    ]);
+  });
+
+  it('declines where something is going', () => {
+    // "in den Erdgeschoss" is the error this replaces.
+    expect([0, 1, 2, 4].map((i) => floorAccusative(i, 5))).toEqual([
+      'in den Keller',
+      'ins Erdgeschoss',
+      'in den ersten Stock',
+      'auf den Dachboden',
+    ]);
+  });
+
+  it('reads correctly in the sentences that use it', () => {
+    expect(LOG.floorFlooded(floorDative(2, 5))).toBe('Das Wasser steht im ersten Stock.');
+    expect(LOG.relocationStarted('Kartenwerk', floorAccusative(1, 5))).toBe(
+      'Kartenwerk wird ins Erdgeschoss getragen.',
+    );
+    expect(LOG.relocationFinished('Kartenwerk', floorDative(4, 5))).toBe(
+      'Kartenwerk steht jetzt auf dem Dachboden.',
+    );
   });
 });

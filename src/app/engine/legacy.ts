@@ -55,6 +55,29 @@ export function protocolSlotsFor(record: LegacyRecord): number {
   return Math.min(PROTOCOLS.maxSlots, PROTOCOLS.startingSlots + earned);
 }
 
+/**
+ * Whether the relocate action is available to protocols yet.
+ *
+ * prompt.md 5.9 lists "Umlagern (sobald freigeschaltet)" and 5.12 names new actions as
+ * something the legacy unlocks. It is knowledge, not power: the action itself costs the
+ * same whenever it is used.
+ */
+export function relocateUnlocked(record: LegacyRecord): boolean {
+  return totalSent(record) >= LEGACY.relocateThreshold;
+}
+
+/** Whether this archive has been earned yet. The standard house is always open. */
+export function scenarioUnlocked(record: LegacyRecord, scenarioId: string): boolean {
+  return totalSent(record) >= (LEGACY.scenarioThresholds[scenarioId] ?? 0);
+}
+
+/** Units still to transmit before this archive opens, or null once it is open. */
+export function unitsToScenario(record: LegacyRecord, scenarioId: string): number | null {
+  const threshold = LEGACY.scenarioThresholds[scenarioId] ?? 0;
+  const total = totalSent(record);
+  return total >= threshold ? null : threshold - total;
+}
+
 /** Units still to transmit before the next slot, or null once all are earned. */
 export function unitsToNextSlot(record: LegacyRecord): number | null {
   const total = totalSent(record);

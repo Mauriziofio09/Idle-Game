@@ -180,6 +180,8 @@ describe('validation', () => {
       intact: COLLECTIONS.unitsEach,
       sent: 40,
       rotted: 0,
+      burned: 0,
+      transitTicks: 0,
       lost: false,
     };
     expect(validateState(broken)).toBeNull();
@@ -279,6 +281,24 @@ describe('migration', () => {
     });
     expect(result.file.state.pending).toEqual([]);
     expect(result.file.state.chronicle).toEqual([]);
+  });
+
+  it('lifts a version 3 save into the standard house', () => {
+    const v3 = JSON.parse(JSON.stringify(createInitialState('4F2A')));
+    delete v3.scenarioId;
+    for (const id of Object.keys(v3.collections)) {
+      delete v3.collections[id].burned;
+      delete v3.collections[id].transitTicks;
+    }
+    v3.schemaVersion = 3;
+
+    const result = parseSaveFile(JSON.stringify({ schemaVersion: 3, savedAt: 1, state: v3 }));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.state.scenarioId).toBe('standard');
+    expect(result.file.state.collections.maps.burned).toBe(0);
+    expect(result.file.state.collections.maps.transitTicks).toBe(0);
   });
 
   it('leaves a current save alone', () => {
@@ -464,11 +484,27 @@ describe('weather, announcements and the timeline in a save', () => {
 
   it('refuses a lost collection that still holds units', () => {
     const broken = base();
-    broken.collections.maps = { floor: 0, intact: 50, sent: 0, rotted: 50, lost: true };
+    broken.collections.maps = {
+      floor: 0,
+      intact: 50,
+      sent: 0,
+      rotted: 50,
+      burned: 0,
+      transitTicks: 0,
+      lost: true,
+    };
     expect(validateState(broken)).toBeNull();
 
     const proper = base();
-    proper.collections.maps = { floor: 0, intact: 0, sent: 0, rotted: 100, lost: true };
+    proper.collections.maps = {
+      floor: 0,
+      intact: 0,
+      sent: 0,
+      rotted: 100,
+      burned: 0,
+      transitTicks: 0,
+      lost: true,
+    };
     expect(validateState(proper)).not.toBeNull();
   });
 
@@ -497,5 +533,114 @@ describe('weather, announcements and the timeline in a save', () => {
     ]) {
       expect(validateState({ ...base(), chronicle })).toBeNull();
     }
+  });
+});
+
+describe('scenarios and the new collection fields in a save', () => {
+  const base = () => JSON.parse(JSON.stringify(createInitialState('4F2A')));
+
+  it('round-trips a seven-floor archive', () => {
+    const tower = simulate(createInitialState('9B01', { scenarioId: 'tower' }), 400).state;
+    const result = decodeExport(encodeExport(fileFor(tower)));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.state).toEqual(tower);
+    expect(result.file.state.humidity.length).toBe(7);
+  });
+
+  it('refuses a scenario it does not know', () => {
+    expect(validateState({ ...base(), scenarioId: 'atlantis' })).toBeNull();
+    expect(validateState({ ...base(), scenarioId: undefined })).toBeNull();
+  });
+
+  it('refuses a house whose humidity does not match its floors', () => {
+    const tower = JSON.parse(JSON.stringify(createInitialState('4F2A', { scenarioId: 'tower' })));
+    tower.humidity = tower.humidity.slice(0, 5);
+    expect(validateState(tower)).toBeNull();
+  });
+
+  it('refuses a collection standing on a floor the house does not have', () => {
+    const broken = base();
+    broken.collections.maps.floor = 6;
+    expect(validateState(broken)).toBeNull();
+  });
+
+  it('refuses books that no longer balance once burning is counted', () => {
+    const broken = base();
+    broken.collections.maps = {
+      floor: 0,
+      intact: 50,
+      sent: 0,
+      rotted: 0,
+      burned: 0,
+      transitTicks: 0,
+      lost: false,
+    };
+    expect(validateState(broken)).toBeNull();
+
+    const balanced = base();
+    balanced.collections.maps = {
+      floor: 0,
+      intact: 20,
+      sent: 30,
+      rotted: 10,
+      burned: 40,
+      transitTicks: 0,
+      lost: false,
+    };
+    expect(validateState(balanced)).not.toBeNull();
+  });
+
+  it('refuses a collection on its way from the top floor', () => {
+    const broken = base();
+    broken.collections.languages.floor = 4;
+    broken.collections.languages.transitTicks = 10;
+    expect(validateState(broken)).toBeNull();
+  });
+
+  it('refuses a transit longer than a move takes', () => {
+    const broken = base();
+    broken.collections.maps.transitTicks = 999;
+    expect(validateState(broken)).toBeNull();
+  });
+});
+
+describe('invariants a relocation must not break in a save', () => {
+  const base = () => JSON.parse(JSON.stringify(createInitialState('4F2A')));
+
+  it('refuses a transit that would never finish', () => {
+    // The engine only arrives on exactly zero, so a fraction counts past it forever:
+    // the collection could never be moved again while burn and transmit still take it.
+    const broken = base();
+    broken.collections.maps.transitTicks = 0.5;
+    expect(validateState(broken)).toBeNull();
+  });
+
+  it('refuses more collections on a floor than the limit allows', () => {
+    const broken = base();
+    for (const id of ['maps', 'chronicle', 'naturalHistory', 'music'] as const) {
+      broken.collections[id].floor = 2;
+    }
+    expect(validateState(broken)).toBeNull();
+  });
+
+  it('counts a collection on its way towards the floor it is heading for', () => {
+    const broken = base();
+    // Three already on floor 2, and a fourth climbing towards it.
+    broken.collections.naturalHistory.floor = 2;
+    broken.collections.music.floor = 2;
+    broken.collections.letters.floor = 2;
+    broken.collections.chronicle.floor = 1;
+    broken.collections.chronicle.transitTicks = 10;
+    expect(validateState(broken)).toBeNull();
+  });
+
+  it('refuses a collection that is both on the stairs and on the air', () => {
+    const broken = base();
+    broken.systems.transmitter.on = true;
+    broken.transmitting = 'maps';
+    broken.collections.maps.transitTicks = 10;
+    expect(validateState(broken)).toBeNull();
   });
 });

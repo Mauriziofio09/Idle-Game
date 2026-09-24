@@ -12,8 +12,8 @@ import {
   CLOSING_SENTENCES,
   COLLECTION_NAMES,
   END_LABELS,
-  FLOOR_NAMES,
   SYSTEM_NAMES,
+  floorName,
 } from '../../content/de';
 import { buildChronicle } from '../../engine/chronicle';
 import { GameStore } from '../../game/game-store';
@@ -94,7 +94,7 @@ export class Chronicle {
   });
 
   protected async share(): Promise<void> {
-    const text = `${shareText(this.chronicle())}\n${this.link()}`;
+    const text = `${shareText(this.chronicle(), this.store.floorCount())}\n${this.link()}`;
     this.shareBody.set(text);
 
     // Web Share where it exists, clipboard everywhere else, and the text on screen if
@@ -123,7 +123,7 @@ export class Chronicle {
   }
 
   private link(): string {
-    return seedLink(this.seed(), location.origin, location.pathname);
+    return seedLink(this.seed(), this.store.scenarioId(), location.origin, location.pathname);
   }
 
   private describeLoss(kind: string, id: string): string {
@@ -133,6 +133,8 @@ export class Chronicle {
         return CHRONICLE_LABELS.lostSystem(name);
       case 'collection-lost':
         return CHRONICLE_LABELS.lostCollection(name);
+      case 'collection-burned':
+        return CHRONICLE_LABELS.burnedCollection(name);
       default:
         return CHRONICLE_LABELS.flooded(name);
     }
@@ -142,9 +144,10 @@ export class Chronicle {
     if (kind === 'system-lost') {
       return SYSTEM_NAMES[id as keyof typeof SYSTEM_NAMES] ?? id;
     }
-    if (kind === 'collection-lost') {
+    if (kind === 'collection-lost' || kind === 'collection-burned') {
       return COLLECTION_NAMES[id as keyof typeof COLLECTION_NAMES] ?? id;
     }
-    return FLOOR_NAMES[Number(id)] ?? id;
+    // The floor names depend on how tall this archive is.
+    return floorName(Number(id), this.store.floorCount());
   }
 }

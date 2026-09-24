@@ -14,11 +14,12 @@ import { applyAction, canApply, dismantleYield, repairPreview } from '../engine/
 import { ENERGY, ENTROPY, METRES_PER_FLOOR, UI_THRESHOLDS } from '../engine/balance';
 import { OFFLINE, TICK_MS } from '../engine/balance';
 import { simulateInChunks } from '../engine/offline';
-import { normaliseSeed, stateToSeed } from '../engine/rng';
+import { dailySeed, normaliseSeed, stateToSeed } from '../engine/rng';
 import {
   COLLECTION_IDS,
   SYSTEM_IDS,
   createInitialState,
+  floorCount,
   isFlooded,
   savedShare,
   systemFloor,
@@ -34,12 +35,15 @@ import {
   bankRun,
   fragmentsUnlocked,
   protocolSlotsFor,
+  relocateUnlocked,
+  scenarioUnlocked,
+  unitsToScenario,
   totalSent as legacyTotalSent,
   unitsToNextFragment,
   unitsToNextSlot,
   type LegacyRecord,
 } from '../engine/legacy';
-import { PROTOCOLS } from '../engine/balance';
+import { PROTOCOLS, SCENARIO_IDS, type ScenarioId } from '../engine/balance';
 import { describe, type LogEntry } from './log';
 import { SaveService } from './save';
 
@@ -78,6 +82,8 @@ export class GameStore {
   readonly energyRate = computed(() => production(this._state()) - demand(this._state()));
   readonly decayMultiplier = computed(() => decayMultiplier(this._state().entropy));
   readonly waterMetres = computed(() => this._state().water * METRES_PER_FLOOR);
+  readonly floorCount = computed(() => floorCount(this._state()));
+  readonly scenarioId = computed(() => this._state().scenarioId);
   readonly energyShare = computed(() => (this._state().energy / ENERGY.capacity) * 100);
 
   /** False when the browser refuses storage; the settings panel says so plainly. */
@@ -102,6 +108,15 @@ export class GameStore {
   readonly legacyFragments = computed(() => fragmentsUnlocked(this._legacy()));
   readonly legacyNextFragment = computed(() => unitsToNextFragment(this._legacy()));
   readonly legacyNextSlot = computed(() => unitsToNextSlot(this._legacy()));
+  readonly relocateUnlocked = computed(() => relocateUnlocked(this._legacy()));
+
+  scenarioUnlocked(id: string): boolean {
+    return scenarioUnlocked(this._legacy(), id);
+  }
+
+  unitsToScenario(id: string): number | null {
+    return unitsToScenario(this._legacy(), id);
+  }
 
   constructor() {
     this.openLog();
@@ -115,10 +130,21 @@ export class GameStore {
    * counts as zero; beyond the window the archive goes into emergency stasis and
    * simply does not decay further.
    */
-  initialize(now: number, linkedSeed: string | null = null): AwayReport | null {
+  initialize(
+    now: number,
+    linkedSeed: string | null = null,
+    linkedScenario: string | null = null,
+  ): AwayReport | null {
     this.simulatedUntilMs = now;
 
     const seedFromLink = linkedSeed ? normaliseSeed(linkedSeed) : null;
+    // A link names the house as well as the seed; an unknown one falls back to the
+    // standard archive rather than refusing the link.
+    const houseFromLink: ScenarioId = (SCENARIO_IDS as readonly string[]).includes(
+      linkedScenario ?? '',
+    )
+      ? (linkedScenario as ScenarioId)
+      : 'standard';
     const outcome = this.saves.load();
 
     // A shared link asks for a specific archive. It is honoured when nothing would be
@@ -126,11 +152,11 @@ export class GameStore {
     if (seedFromLink) {
       const saved = outcome.kind === 'loaded' ? outcome.save.file.state : null;
       if (!saved || saved.seed === seedFromLink || saved.ended) {
-        if (saved?.seed !== seedFromLink) {
+        if (saved?.seed !== seedFromLink || saved.scenarioId !== houseFromLink) {
           // No banking here. At this point `_state` still holds the placeholder the
           // field initializer built; banking it would count an archive that was never
           // played and inflate the run counter the legacy panel shows.
-          this.beginArchive(seedFromLink, now);
+          this.beginArchive(seedFromLink, now, houseFromLink);
           return null;
         }
       } else {
@@ -158,7 +184,7 @@ export class GameStore {
       this._startupNotice.set('from-backup');
     }
 
-    const restored = outcome.save.file.state;
+    const restored = this.withAllowedProtocols(outcome.save.file.state);
     this._state.set(restored);
     this.note(LOG_SESSION.resumed);
 
@@ -216,7 +242,7 @@ export class GameStore {
       return { ok: false, problem: result.problem };
     }
     this.bankIfUnfinished();
-    this._state.set(result.file.state);
+    this._state.set(this.withAllowedProtocols(result.file.state));
     this.simulatedUntilMs = now;
     this._startupNotice.set(null);
     this._selection.set(null);
@@ -229,17 +255,31 @@ export class GameStore {
    * Ends this run and starts a new archive. The legacy is untouched — and it decides how
    * many protocol slots the next archive begins with.
    */
-  startNewArchive(now = Date.now(), seed = freshSeed()): void {
+  startNewArchive(now = Date.now(), seed = freshSeed(), scenarioId?: ScenarioId): void {
     // The run being replaced is real, so whatever it transmitted counts first.
     this.bankIfUnfinished();
-    this.beginArchive(seed, now);
+    this.beginArchive(seed, now, scenarioId ?? this._state().scenarioId);
+  }
+
+  /**
+   * Today's archive: the same seed for everyone, all day — and therefore always the
+   * standard house. Playing the date's seed in a different building would give two
+   * players different archives on the same day, which is the whole point of it.
+   */
+  startDailyArchive(now = Date.now()): void {
+    const today = new Date(now);
+    const seed = dailySeed(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    this.startNewArchive(now, seed, 'standard');
   }
 
   /** Puts a new archive in place. Banking, if any, is the caller's decision. */
-  private beginArchive(seed: string, now: number): void {
+  private beginArchive(seed: string, now: number, scenarioId: ScenarioId = 'standard'): void {
     this.saves.clearRun();
     this._state.set(
-      createInitialState(seed, { protocolSlots: protocolSlotsFor(this._legacy()) }),
+      createInitialState(seed, {
+        protocolSlots: protocolSlotsFor(this._legacy()),
+        scenarioId,
+      }),
     );
     this.simulatedUntilMs = now;
     this._startupNotice.set(null);
@@ -296,7 +336,7 @@ export class GameStore {
   }
 
   systemsOnFloor(floor: number): SystemId[] {
-    return SYSTEM_IDS.filter((id) => systemFloor(id) === floor);
+    return SYSTEM_IDS.filter((id) => systemFloor(this._state(), id) === floor);
   }
 
   collectionsOnFloor(floor: number): CollectionId[] {
@@ -392,6 +432,21 @@ export class GameStore {
    * Folds a finished run into the legacy, once. Everything transmitted counts for good;
    * prompt.md 5.12 keeps the unlocks to knowledge and options, never to multipliers.
    */
+  /**
+   * Drops rules the legacy has not paid for.
+   *
+   * prompt.md 5.9 gates relocation behind an unlock, and the engine runs whatever is in
+   * the state. A save can be hand-edited or imported, so the gate has to be applied
+   * where the state enters the game, not only where the editor offers the action.
+   */
+  private withAllowedProtocols(state: GameState): GameState {
+    if (relocateUnlocked(this._legacy())) {
+      return state;
+    }
+    const allowed = state.protocols.filter((rule) => rule.action.type !== 'relocate');
+    return allowed.length === state.protocols.length ? state : { ...state, protocols: allowed };
+  }
+
   private bank(state: GameState): void {
     const banked = bankRun(this._legacy(), state);
     this._legacy.set(banked);
@@ -435,8 +490,9 @@ export class GameStore {
 
   private record(events: { event: Parameters<typeof describe>[0]; tick: number }[]): void {
     const lines: LogEntry[] = [];
+    const floors = floorCount(this._state());
     for (const { event, tick } of events) {
-      const described = describe(event);
+      const described = describe(event, floors);
       if (described) {
         lines.push({ tick, text: described.text, kind: described.kind, id: this.nextLogId++ });
       }

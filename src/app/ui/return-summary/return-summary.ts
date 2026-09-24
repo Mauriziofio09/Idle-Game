@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 
 import {
   COLLECTION_NAMES,
-  FLOOR_NAMES,
   RETURN_LABELS,
   SYSTEM_NAMES,
+  floorName,
 } from '../../content/de';
 import { METRES_PER_FLOOR, OFFLINE } from '../../engine/balance';
 import type { AwayReport } from '../../game/away-report';
@@ -81,7 +81,10 @@ export class ReturnSummary {
   });
 
   protected readonly floodedNote = computed(() => {
-    const floors = this.report().floodedFloors;
-    return floors.length > 0 ? floors.map((floor) => FLOOR_NAMES[floor]).join(' · ') : null;
+    const flooded = this.report().floodedFloors;
+    const floors = this.store.floorCount();
+    return flooded.length > 0
+      ? flooded.map((floor) => floorName(floor, floors)).join(' · ')
+      : null;
   });
 }

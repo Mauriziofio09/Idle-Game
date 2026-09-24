@@ -1,10 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 
-import { COLLECTION_NAMES, DETAIL_LABELS, FLOOR_NAMES, STATE_LABELS, SYSTEM_NAMES } from '../../content/de';
-import { COLLECTIONS, FLOOR_COUNT, WATER } from '../../engine/balance';
+import {
+  COLLECTION_NAMES,
+  DETAIL_LABELS,
+  STATE_LABELS,
+  SYSTEM_NAMES,
+  floorName,
+} from '../../content/de';
+import { COLLECTIONS } from '../../engine/balance';
 import { GameStore } from '../../game/game-store';
 import { formatInteger, formatPercent } from '../../format';
 import { inflow } from '../../engine/step';
+import { scenarioOf } from '../../engine/state';
 
 /** How many segments the roof is drawn from; broken ones show the damage. */
 const ROOF_SEGMENTS = 12;
@@ -35,7 +42,7 @@ export class CrossSection {
 
   /** How much of the building's height stands under water. */
   protected readonly waterHeight = computed(
-    () => (this.store.state().water / WATER.max) * 100,
+    () => (this.store.state().water / this.store.floorCount()) * 100,
   );
 
   protected readonly roofSegments = computed(() => {
@@ -53,7 +60,8 @@ export class CrossSection {
   /** Rain strokes: more of them the harder it falls. Count, not motion. */
   protected readonly rain = computed(() => {
     const state = this.store.state();
-    const intensity = inflow(state) / WATER.rainBasePerSecond;
+    // Against this archive's own baseline, so the tower and the drought read alike.
+    const intensity = inflow(state) / scenarioOf(state).rainBasePerSecond;
     const strokes = Math.max(
       4,
       Math.min(MAX_RAIN_STROKES, Math.round(intensity * RAIN_STROKES_AT_BASE)),
@@ -69,12 +77,13 @@ export class CrossSection {
   /** Floors top down: the attic first, the cellar last. */
   protected readonly floors = computed(() => {
     const state = this.store.state();
-    return Array.from({ length: FLOOR_COUNT }, (_, offset) => {
-      const index = FLOOR_COUNT - 1 - offset;
+    const floors = this.store.floorCount();
+    return Array.from({ length: floors }, (_, offset) => {
+      const index = floors - 1 - offset;
       return {
         index,
         indexLabel: formatInteger(index),
-        name: FLOOR_NAMES[index],
+        name: floorName(index, floors),
         flooded: this.store.floorIsFlooded(index),
         humidity: formatPercent(state.humidity[index]),
         systems: this.store.systemsOnFloor(index).map((id) => {
@@ -103,6 +112,7 @@ export class CrossSection {
             readout: formatPercent((collection.intact / COLLECTIONS.unitsEach) * 100),
             meterLabel: `${COLLECTION_NAMES[id]} · ${DETAIL_LABELS.intact}`,
             lost: collection.lost,
+            inTransit: collection.transitTicks > 0,
             selected: this.isCollectionSelected(id),
           };
         }),

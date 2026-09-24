@@ -6,17 +6,19 @@
  * this function, which is what keeps offline play identical to online play.
  */
 
-import { DISMANTLE, ENTROPY, REPAIR } from './balance';
+import { BURN, DISMANTLE, ENERGY, ENTROPY, RELOCATE, REPAIR } from './balance';
 import type { DomainEvent } from './domain-events';
 import type { CollectionId, GameState, SystemId } from './state';
-import { cloneState } from './state';
+import { cloneState, collectionsOn, topFloor } from './state';
 
 export type Action =
   | { type: 'repair'; systemId: SystemId }
   | { type: 'toggle'; systemId: SystemId; on: boolean }
   | { type: 'dismantle'; systemId: SystemId }
   | { type: 'transmit-start'; collectionId: CollectionId }
-  | { type: 'transmit-stop' };
+  | { type: 'transmit-stop' }
+  | { type: 'relocate'; collectionId: CollectionId }
+  | { type: 'burn'; collectionId: CollectionId };
 
 
 export interface ActionResult {
@@ -58,6 +60,25 @@ export function repairPreview(state: GameState, systemId: SystemId): RepairPrevi
   };
 }
 
+/** Energy won by burning what is left of a collection. Half of it, and it is gone. */
+export function burnYield(state: GameState, id: CollectionId): number {
+  return state.collections[id].intact * BURN.energyPerUnit;
+}
+
+/** Whether a collection could be carried one floor up right now. */
+export function canRelocate(state: GameState, id: CollectionId): boolean {
+  const collection = state.collections[id];
+  const target = collection.floor + 1;
+  return (
+    !collection.lost &&
+    collection.intact > 0 &&
+    collection.transitTicks === 0 &&
+    target <= topFloor(state) &&
+    collectionsOn(state, target) < RELOCATE.maxPerFloor &&
+    state.energy >= RELOCATE.energyCost
+  );
+}
+
 /** Material returned by dismantling. Early dismantling pays better — and costs you the function. */
 export function dismantleYield(state: GameState, systemId: SystemId): number {
   const system = state.systems[systemId];
@@ -76,6 +97,13 @@ export function canApply(state: GameState, action: Action): boolean {
   if (action.type === 'transmit-stop') {
     return state.transmitting !== null;
   }
+  if (action.type === 'relocate') {
+    return canRelocate(state, action.collectionId);
+  }
+  if (action.type === 'burn') {
+    const collection = state.collections[action.collectionId];
+    return !collection.lost && collection.intact > 0 && collection.transitTicks === 0;
+  }
   if (action.type === 'transmit-start') {
     const mast = state.systems.transmitter;
     const collection = state.collections[action.collectionId];
@@ -83,6 +111,7 @@ export function canApply(state: GameState, action: Action): boolean {
       !mast.lost &&
       !collection.lost &&
       collection.intact > 0 &&
+      collection.transitTicks === 0 &&
       state.transmitting !== action.collectionId
     );
   }
@@ -120,6 +149,12 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
   if (action.type === 'transmit-start' || action.type === 'transmit-stop') {
     return applyTransmit(state, action, events, reject);
+  }
+  if (action.type === 'relocate') {
+    return applyRelocate(state, action.collectionId, events, reject);
+  }
+  if (action.type === 'burn') {
+    return applyBurn(state, action.collectionId, events, reject);
   }
 
   if (state.systems[action.systemId].lost) {
@@ -212,6 +247,90 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 }
 
 /**
+ * Carrying a collection one floor up.
+ *
+ * It takes half a minute, during which the collection is on its way and cannot be sent,
+ * burned or moved again — and goes on rotting where it started, so a move is not a way
+ * to pause the decay. No floor takes more than three collections.
+ */
+function applyRelocate(
+  state: GameState,
+  id: CollectionId,
+  events: DomainEvent[],
+  reject: (reason: ActionRejectionReason) => ActionResult,
+): ActionResult {
+  const collection = state.collections[id];
+  if (collection.lost || collection.intact <= 0) {
+    return reject('nothing-to-transmit');
+  }
+  if (collection.transitTicks > 0) {
+    return reject('already-in-transit');
+  }
+  const target = collection.floor + 1;
+  if (target > topFloor(state)) {
+    return reject('no-floor-above');
+  }
+  if (collectionsOn(state, target) >= RELOCATE.maxPerFloor) {
+    return reject('floor-is-full');
+  }
+  if (state.energy < RELOCATE.energyCost) {
+    return reject('not-enough-energy');
+  }
+
+  const next = cloneState(state);
+  next.energy -= RELOCATE.energyCost;
+  next.collections[id].transitTicks = RELOCATE.transitSeconds;
+  // A collection on its way cannot also be going out over the mast.
+  if (next.transmitting === id) {
+    next.transmitting = null;
+    events.push({ type: 'transmission-stopped', tick: next.tick, collectionId: id });
+  }
+
+  events.push({ type: 'relocation-started', tick: next.tick, collectionId: id, toFloor: target });
+  return { state: next, events, applied: true };
+}
+
+/**
+ * Burning a collection for power.
+ *
+ * The darkest thing the player can do: what is left becomes energy, and the archive
+ * buys itself time by destroying part of what it exists to keep. Irreversible, and
+ * expensive in entropy.
+ */
+function applyBurn(
+  state: GameState,
+  id: CollectionId,
+  events: DomainEvent[],
+  reject: (reason: ActionRejectionReason) => ActionResult,
+): ActionResult {
+  const collection = state.collections[id];
+  if (collection.lost || collection.intact <= 0) {
+    return reject('nothing-to-burn');
+  }
+  if (collection.transitTicks > 0) {
+    return reject('already-in-transit');
+  }
+
+  const next = cloneState(state);
+  const target = next.collections[id];
+  const units = target.intact;
+  const energy = units * BURN.energyPerUnit;
+
+  target.burned += units;
+  target.intact = 0;
+  target.lost = true;
+  next.energy = Math.min(ENERGY.capacity, next.energy + energy);
+  next.entropy += ENTROPY.perBurn;
+  if (next.transmitting === id) {
+    next.transmitting = null;
+  }
+
+  events.push({ type: 'collection-burned', tick: next.tick, collectionId: id, units, energy });
+  next.chronicle.push({ tick: next.tick, kind: 'collection-burned', id });
+  return { state: next, events, applied: true };
+}
+
+/**
  * Starting and stopping the transmission. Only ever one collection at a time: the mast
  * has one channel, and choosing what goes out is the whole game.
  */
@@ -240,6 +359,9 @@ function applyTransmit(
   const collection = state.collections[action.collectionId];
   if (collection.lost || collection.intact <= 0) {
     return reject('nothing-to-transmit');
+  }
+  if (collection.transitTicks > 0) {
+    return reject('already-in-transit');
   }
   if (state.transmitting === action.collectionId) {
     return { state, events, applied: false };

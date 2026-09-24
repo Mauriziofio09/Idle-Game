@@ -5,7 +5,13 @@
  * It is a record of a run, not an advertisement.
  */
 
-import { CHRONICLE_LABELS, COLLECTION_NAMES, SYSTEM_NAMES, FLOOR_NAMES, APP } from '../content/de';
+import {
+  APP,
+  CHRONICLE_LABELS,
+  COLLECTION_NAMES,
+  SYSTEM_NAMES,
+  floorName,
+} from '../content/de';
 import type { RunChronicle } from '../engine/chronicle';
 import { formatDuration, formatPercent } from '../format';
 
@@ -19,7 +25,7 @@ export function bar(share: number): string {
   return FILLED.repeat(filled) + EMPTY.repeat(BAR_CELLS - filled);
 }
 
-export function shareText(chronicle: RunChronicle): string {
+export function shareText(chronicle: RunChronicle, floors: number): string {
   const width = Math.max(
     ...chronicle.collections.map((entry) => COLLECTION_NAMES[entry.id].length),
   );
@@ -37,24 +43,34 @@ export function shareText(chronicle: RunChronicle): string {
   ];
 
   if (chronicle.lastLoss) {
-    lines.push('', CHRONICLE_LABELS.lastFell(lossName(chronicle.lastLoss)));
+    lines.push('', CHRONICLE_LABELS.lastFell(lossName(chronicle.lastLoss, floors)));
   }
 
   return lines.join('\n');
 }
 
-/** A seed link, so someone else can play exactly this archive. */
-export function seedLink(seed: string, origin: string, path: string): string {
-  return `${origin}${path}?archiv=${seed}`;
+/**
+ * A link that opens exactly this archive — the seed alone is not enough, because the
+ * same seed in a different house is a different game.
+ */
+export function seedLink(
+  seed: string,
+  scenarioId: string,
+  origin: string,
+  path: string,
+): string {
+  const house = scenarioId === 'standard' ? '' : `&haus=${scenarioId}`;
+  return `${origin}${path}?archiv=${seed}${house}`;
 }
 
-function lossName(entry: RunChronicle['timeline'][number]): string {
+function lossName(entry: RunChronicle['timeline'][number], floors: number): string {
   switch (entry.kind) {
     case 'system-lost':
       return SYSTEM_NAMES[entry.id as keyof typeof SYSTEM_NAMES] ?? entry.id;
     case 'collection-lost':
+    case 'collection-burned':
       return COLLECTION_NAMES[entry.id as keyof typeof COLLECTION_NAMES] ?? entry.id;
     case 'floor-flooded':
-      return FLOOR_NAMES[Number(entry.id)] ?? entry.id;
+      return floorName(Number(entry.id), floors);
   }
 }

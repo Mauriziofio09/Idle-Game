@@ -75,9 +75,24 @@
     <dd>{{ collection.sent }}</dd>
     <dt>{{ labels.rotted }}</dt>
     <dd>{{ collection.rotted }}</dd>
+    @if (collection.hasBurned) {
+      <dt>{{ labels.burned }}</dt>
+      <dd>{{ collection.burnedShare }}</dd>
+    }
   </dl>
 
   <div class="actions">
+    <div class="action">
+      <app-button
+        variant="secondary"
+        [disabled]="!collection.canRelocate"
+        (pressed)="relocate(collection.id)"
+      >
+        {{ actionLabels.relocate }}
+      </app-button>
+      <p class="hint">{{ collection.relocateHint }}</p>
+    </div>
+
     <div class="action">
       @if (collection.transmitting) {
         <app-button variant="secondary" (pressed)="stopTransmit()">
@@ -94,6 +109,41 @@
       }
       <p class="hint">{{ collection.transmitHint }}</p>
       <p class="hint">{{ collection.rateHint }}</p>
+    </div>
+
+    <!--
+      Burning. Two deliberate presses, and the wording names what is destroyed before
+      it names what is gained. This is the darkest thing the player can do.
+    -->
+    <div class="action">
+      @if (burnStep() === 0) {
+        <app-button
+          #burnButton
+          variant="secondary"
+          [disabled]="!collection.canBurn"
+          (pressed)="askBurn()"
+        >
+          {{ actionLabels.burn }}
+        </app-button>
+        <p class="hint">{{ collection.burnHint }}</p>
+      } @else if (burnStep() === 1) {
+        <p class="warning">{{ collection.burnWarningFirst }}</p>
+        <p class="hint">{{ collection.burnCost }}</p>
+        <app-button #burnButton variant="secondary" (pressed)="confirmBurn()">
+          {{ actionLabels.burnConfirm }}
+        </app-button>
+        <app-button variant="secondary" (pressed)="cancelBurn()">
+          {{ actionLabels.cancel }}
+        </app-button>
+      } @else {
+        <p class="warning">{{ collection.burnWarningFinal }}</p>
+        <app-button #burnButton variant="primary" (pressed)="burn(collection.id)">
+          {{ actionLabels.burnFinal }}
+        </app-button>
+        <app-button variant="secondary" (pressed)="cancelBurn()">
+          {{ actionLabels.cancel }}
+        </app-button>
+      }
     </div>
   </div>
 } @else if (floor(); as floor) {

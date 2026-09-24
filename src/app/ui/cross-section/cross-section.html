@@ -91,7 +91,11 @@
               @if (collection.lost) {
                 <span class="chip-state">{{ stateLabels.lost }}</span>
               } @else {
-                <span class="chip-state">{{ collection.readout }}</span>
+                <span class="chip-state">
+                  {{ collection.readout }}@if (collection.inTransit) {
+                    · {{ stateLabels.inTransit }}
+                  }
+                </span>
               }
             </button>
 

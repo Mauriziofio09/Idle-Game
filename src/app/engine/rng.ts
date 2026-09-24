@@ -75,3 +75,14 @@ export function normaliseSeed(input: string): string | null {
   const candidate = input.trim().toUpperCase();
   return isValidSeed(candidate) ? candidate : null;
 }
+
+/**
+ * The seed everyone plays today.
+ *
+ * Derived from the calendar date alone, so two people who never spoke get the same
+ * archive and can compare what they saved. The caller supplies the date, because the
+ * engine has no clock.
+ */
+export function dailySeed(year: number, month: number, day: number): string {
+  return stateToSeed(seedToState(`${year}-${month}-${day}`));
+}

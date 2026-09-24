@@ -6,6 +6,10 @@
   <p class="intro">{{ rate }}</p>
 }
 
+@if (relocateLockedHint(); as locked) {
+  <p class="intro">{{ locked }}</p>
+}
+
 @if (rules().length === 0) {
   <p class="intro">{{ labels.empty }}</p>
 }
@@ -66,7 +70,7 @@
               [attr.aria-label]="view.conditionTargetLabel"
               (change)="setConditionFloor(view.rule, +$any($event.target).value)"
             >
-              @for (floor of floors; track floor.index) {
+              @for (floor of floors(); track floor.index) {
                 <option [value]="floor.index" [selected]="floor.index === view.floorTarget">
                   {{ floor.name }}
                 </option>
@@ -129,7 +133,7 @@
             [attr.aria-label]="view.actionLabel"
             (change)="setAction(view.rule, $any($event.target).value)"
           >
-            @for (choice of actionChoices; track choice) {
+            @for (choice of actionChoices(); track choice) {
               <option [value]="choice" [selected]="choice === view.actionChoice">
                 {{ actionLabels[choice] }}
               </option>

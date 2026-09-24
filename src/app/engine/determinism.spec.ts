@@ -4,7 +4,15 @@
  * leans on this.
  */
 
-import { createCursor, isValidSeed, nextFloat, normaliseSeed, seedToState, stateToSeed } from './rng';
+import {
+  createCursor,
+  dailySeed,
+  isValidSeed,
+  nextFloat,
+  normaliseSeed,
+  seedToState,
+  stateToSeed,
+} from './rng';
 import { START_INTEGRITY } from './balance';
 import { applyAction } from './actions';
 import { createInitialState, type GameState } from './state';
@@ -134,6 +142,30 @@ describe('determinism', () => {
         expect(system.integrity).toBeLessThan(START_INTEGRITY.max);
       }
     }
+  });
+});
+
+describe('the daily archive', () => {
+  it('hands everyone the same archive for the same day', () => {
+    expect(dailySeed(2026, 9, 24)).toBe(dailySeed(2026, 9, 24));
+    expect(isValidSeed(dailySeed(2026, 9, 24))).toBe(true);
+  });
+
+  it('turns over at midnight', () => {
+    expect(dailySeed(2026, 9, 24)).not.toBe(dailySeed(2026, 9, 25));
+    expect(dailySeed(2026, 9, 24)).not.toBe(dailySeed(2026, 10, 24));
+    expect(dailySeed(2026, 9, 24)).not.toBe(dailySeed(2027, 9, 24));
+  });
+
+  it('spreads across the year rather than repeating', () => {
+    const seeds = new Set<string>();
+    for (let day = 1; day <= 28; day++) {
+      for (let month = 1; month <= 12; month++) {
+        seeds.add(dailySeed(2026, month, day));
+      }
+    }
+    // 336 days; a four-hex seed has 65 536 values, so collisions should be rare.
+    expect(seeds.size).toBeGreaterThan(320);
   });
 });
 

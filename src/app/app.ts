@@ -19,7 +19,12 @@ import {
   STARTUP_NOTICES,
   STARTUP_NOTICE_DISMISS,
 } from './content/de';
-import { CHRONICLE_LABELS, LEGACY_LABELS, PROTOCOL_LABELS } from './content/de';
+import {
+  CHRONICLE_LABELS,
+  LEGACY_LABELS,
+  PROTOCOL_LABELS,
+  SCENARIO_LABELS,
+} from './content/de';
 import { OFFLINE } from './engine/balance';
 import { AutoSave } from './game/autosave';
 import type { AwayReport } from './game/away-report';
@@ -34,6 +39,7 @@ import { ReturnSummary } from './ui/return-summary/return-summary';
 import { Chronicle } from './ui/chronicle/chronicle';
 import { Legacy } from './ui/legacy/legacy';
 import { Protocols } from './ui/protocols/protocols';
+import { Scenarios } from './ui/scenarios/scenarios';
 import { Settings } from './ui/settings/settings';
 import { Card } from './ui/kit/card';
 import { Icon } from './ui/kit/icon';
@@ -53,6 +59,7 @@ import { IconBox } from './ui/kit/icon-box';
     Legacy,
     Protocols,
     ResourceBar,
+    Scenarios,
     ReturnSummary,
     Settings,
   ],
@@ -74,6 +81,7 @@ export class App implements OnInit {
   protected readonly protocolLabels = PROTOCOL_LABELS;
   protected readonly chronicleLabels = CHRONICLE_LABELS;
   protected readonly legacyLabels = LEGACY_LABELS;
+  protected readonly scenarioLabels = SCENARIO_LABELS;
 
   /** Set when the player was away long enough to deserve an account of it. */
   protected readonly awayReport = signal<AwayReport | null>(null);
@@ -96,8 +104,8 @@ export class App implements OnInit {
   });
 
   ngOnInit(): void {
-    const linked = new URLSearchParams(location.search).get('archiv');
-    const report = this.store.initialize(Date.now(), linked);
+    const params = new URLSearchParams(location.search);
+    const report = this.store.initialize(Date.now(), params.get('archiv'), params.get('haus'));
     // The gate is on what actually happened, not on wall-clock absence: reloading an
     // archive that fell silent days ago must not claim two days in which "nothing was
     // lost". An ending during the absence is always worth showing.

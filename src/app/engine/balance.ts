@@ -12,7 +12,11 @@ export const TICK_MS = 1000;
 /** Seconds of game time per tick. Used to keep the rate formulas readable. */
 export const SECONDS_PER_TICK = TICK_MS / 1000;
 
+/** The standard archive. Scenarios may build a different house; see SCENARIOS. */
 export const FLOOR_COUNT = 5;
+
+/** No scenario may exceed this; the save validator and the UI lean on it. */
+export const MAX_FLOORS = 7;
 
 /** A floor is 3.5 m tall — used only to display the water level in metres. */
 export const METRES_PER_FLOOR = 3.5;
@@ -46,6 +50,7 @@ export const WATER = {
   /** Floors per second the pumps remove at full integrity. */
   pumpMaxPerSecond: 0.005,
   min: 0,
+  /** The ceiling for the standard house; a scenario's own floor count overrides it. */
   max: FLOOR_COUNT,
 } as const;
 
@@ -162,6 +167,10 @@ export const LEGACY = {
   fragmentCount: 24,
   /** Transmitted units that unlock the next protocol slot, cumulative. */
   slotThresholds: [60, 150, 300, 500, 750, 1050] as readonly number[],
+  /** Transmitted units before protocols may carry a collection upstairs. */
+  relocateThreshold: 100,
+  /** Transmitted units before another archive opens up. The standard house is free. */
+  scenarioThresholds: { standard: 0, drought: 200, tower: 400 } as Record<string, number>,
 } as const;
 
 export const OFFLINE = {
@@ -226,3 +235,53 @@ export const COLLECTION_FLOORS = {
   letters: 3,
   languages: 4,
 } as const;
+
+export const RELOCATE = {
+  /** Seconds a collection spends in transit before it arrives one floor up. */
+  transitSeconds: 30,
+  energyCost: 15,
+  /** No floor holds more than this many collections. */
+  maxPerFloor: 3,
+} as const;
+
+export const BURN = {
+  /** Energy won per unit burned. Half of what is left, and it is gone for good. */
+  energyPerUnit: 0.5,
+} as const;
+
+/**
+ * Alternative archives. The standard house is the one prompt.md describes; the others
+ * change the starting conditions without changing a single rule, so everything the
+ * player learned still applies.
+ */
+export const SCENARIOS = {
+  standard: {
+    floors: 5,
+    rainBasePerSecond: 0.004,
+    generatorOutputPerSecond: 3.0,
+    materialStart: 50,
+    systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 2, custodian: 2, roof: 4, transmitter: 4 },
+    collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 2, letters: 3, languages: 4 },
+  },
+  /** Little rain, but a generator that never quite keeps up. Time instead of water. */
+  drought: {
+    floors: 5,
+    rainBasePerSecond: 0.0018,
+    generatorOutputPerSecond: 2.2,
+    materialStart: 50,
+    systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 2, custodian: 2, roof: 4, transmitter: 4 },
+    collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 2, letters: 3, languages: 4 },
+  },
+  /** Seven floors and less material: further to carry, less to repair with. */
+  tower: {
+    floors: 7,
+    rainBasePerSecond: 0.004,
+    generatorOutputPerSecond: 3.0,
+    materialStart: 30,
+    systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 3, custodian: 3, roof: 6, transmitter: 6 },
+    collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 3, letters: 4, languages: 6 },
+  },
+} as const;
+
+export const SCENARIO_IDS = ['standard', 'drought', 'tower'] as const;
+export type ScenarioId = (typeof SCENARIO_IDS)[number];
