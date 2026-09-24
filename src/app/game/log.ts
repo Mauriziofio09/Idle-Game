@@ -5,9 +5,11 @@
  * stays language-free; swapping content/de.ts for another file is all a translation needs.
  */
 
-import { COLLECTION_NAMES, FLOOR_NAMES, LOG, SYSTEM_NAMES } from '../content/de';
+import { COLLECTION_NAMES, EVENT_LOG, FLOOR_NAMES, LOG, SYSTEM_NAMES } from '../content/de';
 import type { DomainEvent } from '../engine/domain-events';
-import { formatAmount, formatPercent } from '../format';
+import type { EventKind } from '../engine/state';
+import { EVENTS } from '../engine/balance';
+import { formatAmount, formatPercent, formatSeconds } from '../format';
 
 export type LogKind = 'note' | 'loss' | 'end';
 
@@ -62,13 +64,66 @@ export function describe(event: DomainEvent): { text: string; kind: LogKind } | 
         kind: 'end',
         text: event.reason === 'silence' ? LOG.endedSilence : LOG.endedNothingLeft,
       };
+    case 'transmission-started':
+      return {
+        kind: 'note',
+        text: LOG.transmissionStarted(COLLECTION_NAMES[event.collectionId]),
+      };
+    case 'transmission-stopped':
+      return {
+        kind: 'note',
+        text: LOG.transmissionStopped(COLLECTION_NAMES[event.collectionId]),
+      };
+    case 'transmission-completed':
+      return {
+        kind: 'note',
+        text: LOG.transmissionCompleted(COLLECTION_NAMES[event.collectionId]),
+      };
+
+    case 'event-announced': {
+      const warning = formatSeconds(EVENTS.warningSeconds);
+      return {
+        kind: 'note',
+        text:
+          event.kind === 'storm-surge'
+            ? EVENT_LOG.announced['storm-surge'](warning)
+            : EVENT_LOG.announced.cloudburst(warning),
+      };
+    }
+
+    case 'event-struck':
+      return { kind: eventKind(event.kind), text: describeStrike(event) };
+
     // A fired protocol needs no line of its own: the action it took already wrote one.
     // Who acted is answered by the rule's own counter and by the return summary.
     case 'protocol-fired':
-    case 'transmission-started':
-    case 'transmission-stopped':
-    case 'transmission-completed':
     case 'action-rejected':
       return null;
+  }
+}
+
+/** Only the kind ones are notes; the rest read as losses. */
+function eventKind(kind: EventKind): LogKind {
+  return kind === 'driftwood' || kind === 'rain-pause' ? 'note' : 'loss';
+}
+
+function describeStrike(event: Extract<DomainEvent, { type: 'event-struck' }>): string {
+  switch (event.kind) {
+    case 'storm-surge':
+      return EVENT_LOG.struck['storm-surge'];
+    case 'rain-pause':
+      return EVENT_LOG.struck['rain-pause'];
+    case 'cloudburst':
+      return EVENT_LOG.struck.cloudburst;
+    case 'short-circuit':
+      return EVENT_LOG.struck['short-circuit'](
+        event.systemId ? SYSTEM_NAMES[event.systemId] : '',
+      );
+    case 'driftwood':
+      return EVENT_LOG.struck.driftwood(formatAmount(event.amount ?? 0));
+    case 'mould':
+      return EVENT_LOG.struck.mould(
+        event.collectionId ? COLLECTION_NAMES[event.collectionId] : '',
+      );
   }
 }

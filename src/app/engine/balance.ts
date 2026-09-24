@@ -141,6 +141,27 @@ export const EVENTS = {
   basePerMinute: 0.08,
   /** Announced events warn the player this many seconds ahead. */
   warningSeconds: 20,
+  /** Storm surge: the rain triples for a minute. Announced. */
+  stormSurge: { factor: 3, seconds: 60 },
+  /** Short circuit: one running system takes a hit. */
+  shortCircuit: { integrityLoss: 15 },
+  /** Driftwood: something usable washes up. */
+  driftwood: { min: 15, max: 30 },
+  /** A pause in the rain. The only kind event in the list. */
+  rainPause: { factor: 0.3, seconds: 90 },
+  /** Mould: one collection rots three times as fast for a minute. */
+  mould: { factor: 3, seconds: 60 },
+  /** Cloudburst: the roof takes damage. Announced. */
+  cloudburst: { roofLoss: 10 },
+} as const;
+
+export const LEGACY = {
+  /** One lore fragment per this many units transmitted, across all runs. */
+  unitsPerFragment: 25,
+  /** Total fragments written. The last few carry the resolution. */
+  fragmentCount: 24,
+  /** Transmitted units that unlock the next protocol slot, cumulative. */
+  slotThresholds: [60, 150, 300, 500, 750, 1050] as readonly number[],
 } as const;
 
 export const OFFLINE = {

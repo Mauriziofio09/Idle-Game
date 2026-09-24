@@ -21,10 +21,14 @@ import {
   SECONDS_PER_TICK,
   SYSTEMS,
   SYSTEM_DECAY,
+  TRANSMIT,
+  TRANSMITTER_DECAY_SENDING,
   WATER,
 } from './balance';
 import type { DomainEvent, StepResult } from './domain-events';
+import { mouldFactor, runEvents } from './events';
 import { runProtocols } from './protocols';
+import { createCursor } from './rng';
 import {
   COLLECTION_IDS,
   SYSTEM_IDS,
@@ -35,16 +39,9 @@ import {
   type GameState,
   type SystemId,
 } from './state';
+import { decayMultiplier, humidityFactor } from './step-shared';
 
-/** The decay multiplier m(S). Monotonically increasing, never below 1. */
-export function decayMultiplier(entropy: number): number {
-  return 1 + entropy / ENTROPY.decayDivisor;
-}
-
-/** How much a floor's dampness accelerates decay: 0.5 when bone dry, 2.5 when soaked. */
-export function humidityFactor(humidity: number): number {
-  return 0.5 + humidity / HUMIDITY.humidityDivisor;
-}
+export { decayMultiplier, humidityFactor } from './step-shared';
 
 /** Energy produced per second right now. */
 export function production(state: GameState): number {
@@ -64,12 +61,40 @@ export function demand(state: GameState): number {
       sum += SYSTEMS[id].drawPerSecond;
     }
   }
+  // The mast only draws while it is actually sending.
+  if (isTransmitting(state)) {
+    sum += TRANSMIT.energyPerSecond;
+  }
   return sum;
+}
+
+/** True while the mast is pushing a collection out into the world. */
+export function isTransmitting(state: GameState): boolean {
+  const mast = state.systems.transmitter;
+  return state.transmitting !== null && !mast.lost && mast.on;
+}
+
+/**
+ * Units per second the mast moves right now.
+ *
+ * Deviation from prompt.md 5.7, documented in PLAN.md section 9: the spec writes the
+ * rate as 0.2 × I/100 with no supply term. Scaling it by supplyRatio follows 5.6 —
+ * every running consumer works at its share of the power — and the mast is the
+ * hungriest consumer in the house. The same reading is applied to the pumps and to
+ * climate control.
+ */
+export function transmitRate(state: GameState, supplyRatio: number): number {
+  if (!isTransmitting(state)) {
+    return 0;
+  }
+  return (TRANSMIT.unitsPerSecond * state.systems.transmitter.integrity * supplyRatio) / 100;
 }
 
 /** Water entering per second: rain, made worse by entropy. */
 export function inflow(state: GameState): number {
-  return WATER.rainBasePerSecond * (1 + state.entropy / ENTROPY.rainDivisor);
+  return (
+    WATER.rainBasePerSecond * (1 + state.entropy / ENTROPY.rainDivisor) * state.effects.inflowFactor
+  );
 }
 
 /** Water removed per second by the pumps, scaled by how much power they actually get. */
@@ -127,7 +152,12 @@ export function step(state: GameState): StepResult {
   next.entropy += ENTROPY.passivePerSecond * dt;
   const multiplier = decayMultiplier(next.entropy);
 
-  // 2 — Power. When production falls short and the battery is empty, every consumer
+  // 2 — Weather and accidents, drawn from the run's own generator so a seed replays.
+  const cursor = createCursor(next.rngState);
+  events.push(...runEvents(next, cursor));
+  next.rngState = cursor.state;
+
+  // 3 — Power. When production falls short and the battery is empty, every consumer
   //     runs at the same fraction of its demand. Deterministic and visible in the UI.
   //
   //     Deviation from prompt.md 5.6, documented in PLAN.md section 9: the spec writes
@@ -154,7 +184,7 @@ export function step(state: GameState): StepResult {
     events.push({ type: 'undersupply-changed', tick: next.tick, ratio: supplyRatio });
   }
 
-  // 3 — Water. Remember which floors were dry so a new flooding is worth a log line.
+  // 4 — Water. Remember which floors were dry so a new flooding is worth a log line.
   const floodedBefore = floodedFlags(next);
   next.water = clamp(
     next.water + (inflow(next) - outflow(next, supplyRatio)) * dt,
@@ -163,27 +193,37 @@ export function step(state: GameState): StepResult {
   );
   const floodedAfter = floodedFlags(next);
   for (let floor = 0; floor < FLOOR_COUNT; floor++) {
-    if (!floodedBefore[floor] && floodedAfter[floor]) {
+    // Only the first time. Water recedes whenever the pumps out-pump the rain — during
+    // a rain pause, or when a protocol switches them on — so a floor can cross its line
+    // again and again. The timeline records what fell, not how often the level wobbled.
+    if (!floodedBefore[floor] && floodedAfter[floor] && !alreadyFlooded(next, floor)) {
       events.push({ type: 'floor-flooded', tick: next.tick, floor });
+      next.chronicle.push({ tick: next.tick, kind: 'floor-flooded', id: String(floor) });
     }
   }
 
-  // 4 — Humidity drifts towards its target rather than jumping to it.
+  // 5 — Humidity drifts towards its target rather than jumping to it.
   for (let floor = 0; floor < FLOOR_COUNT; floor++) {
     const target = humidityTarget(next, floor, supplyRatio);
     const current = next.humidity[floor];
     next.humidity[floor] = current + (target - current) * HUMIDITY.approachPerSecond * dt;
   }
 
-  // 5 — Wear. Switching a system off conserves it but gives up its function.
+  // 6 — Wear. Switching a system off conserves it but gives up its function.
   for (const id of SYSTEM_IDS) {
     const system = next.systems[id];
     if (system.lost) {
       continue;
     }
     const floor = SYSTEMS[id].floor;
+    // The mast wears faster while it is sending — that is the price of the only thing
+    // in this house that saves anything.
+    const baseDecay =
+      id === 'transmitter' && isTransmitting(next)
+        ? TRANSMITTER_DECAY_SENDING
+        : SYSTEMS[id].baseDecayPerSecond;
     let loss =
-      SYSTEMS[id].baseDecayPerSecond *
+      baseDecay *
       multiplier *
       humidityFactor(next.humidity[floor]) *
       (system.on ? 1 : SYSTEM_DECAY.offMultiplier);
@@ -199,10 +239,22 @@ export function step(state: GameState): StepResult {
       system.lost = true;
       system.on = false;
       events.push({ type: 'system-lost', tick: next.tick, systemId: id });
+      next.chronicle.push({ tick: next.tick, kind: 'system-lost', id });
+
+      // A mast that has fallen cannot go on sending. Saying so is the point: the player
+      // must never be shown "Wird gerade gesendet" while nothing leaves the building.
+      if (id === 'transmitter' && next.transmitting !== null) {
+        events.push({
+          type: 'transmission-stopped',
+          tick: next.tick,
+          collectionId: next.transmitting,
+        });
+        next.transmitting = null;
+      }
     }
   }
 
-  // 6 — Rot. Paper goes slowly in dry air and all at once under water.
+  // 7 — Rot. Paper goes slowly in dry air and all at once under water.
   for (const id of COLLECTION_IDS) {
     const collection = next.collections[id];
     if (collection.lost || collection.intact <= 0) {
@@ -210,7 +262,10 @@ export function step(state: GameState): StepResult {
     }
     const rate = floodedAfter[collection.floor]
       ? COLLECTIONS.floodedDecayPerSecond
-      : COLLECTIONS.decayPerSecond * multiplier * humidityFactor(next.humidity[collection.floor]);
+      : COLLECTIONS.decayPerSecond *
+        multiplier *
+        humidityFactor(next.humidity[collection.floor]) *
+        mouldFactor(next, id);
 
     const lost = collection.intact * Math.min(1, rate * dt);
     collection.intact -= lost;
@@ -231,17 +286,34 @@ export function step(state: GameState): StepResult {
         collectionId: id as CollectionId,
         sent: collection.sent,
       });
+      next.chronicle.push({ tick: next.tick, kind: 'collection-lost', id });
     }
   }
 
-  // 7 — The custodian depot acts, on the state the player would now see. Protocols go
+  // 8 — The mast sends. Whatever leaves the building is safe for good.
+  if (next.transmitting !== null) {
+    const sending = next.collections[next.transmitting];
+    const moved = Math.min(sending.intact, transmitRate(next, supplyRatio) * dt);
+    if (moved > 0) {
+      sending.intact -= moved;
+      sending.sent += moved;
+    }
+    if (sending.intact <= 0) {
+      sending.intact = 0;
+      const finished = next.transmitting;
+      next.transmitting = null;
+      events.push({ type: 'transmission-completed', tick: next.tick, collectionId: finished });
+    }
+  }
+
+  // 9 — The custodian depot acts, on the state the player would now see. Protocols go
   //     through the same applyAction the player uses, which is what keeps an evening
   //     away identical to an evening at the keyboard.
   const automated = runProtocols(next);
   const after = automated.state;
   events.push(...automated.events);
 
-  // 8 — Is the archive still speaking?
+  // 10 — Is the archive still speaking?
   const endReason = checkEnd(after);
   if (endReason) {
     after.ended = true;
@@ -262,6 +334,12 @@ function checkEnd(state: GameState): GameState['endReason'] {
     return 'nothing-left';
   }
   return null;
+}
+
+/** Whether this floor's flooding is already in the timeline. At most 18 entries to scan. */
+function alreadyFlooded(state: GameState, floor: number): boolean {
+  const id = String(floor);
+  return state.chronicle.some((entry) => entry.kind === 'floor-flooded' && entry.id === id);
 }
 
 function floodedFlags(state: GameState): boolean[] {

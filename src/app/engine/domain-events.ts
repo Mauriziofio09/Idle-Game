@@ -7,7 +7,7 @@
  */
 
 import type { ProtocolAction } from './protocol-types';
-import type { CollectionId, EndReason, SystemId } from './state';
+import type { CollectionId, EndReason, EventKind, SystemId } from './state';
 
 export type ActionRejection =
   | 'not-enough-material'
@@ -30,6 +30,15 @@ export type DomainEvent =
   | { type: 'transmission-completed'; tick: number; collectionId: CollectionId }
   | { type: 'undersupply-changed'; tick: number; ratio: number }
   | { type: 'protocol-fired'; tick: number; ruleId: string; action: ProtocolAction }
+  | { type: 'event-announced'; tick: number; kind: EventKind }
+  | {
+      type: 'event-struck';
+      tick: number;
+      kind: EventKind;
+      systemId?: SystemId;
+      collectionId?: CollectionId;
+      amount?: number;
+    }
   | { type: 'action-rejected'; tick: number; reason: ActionRejection }
   | { type: 'run-ended'; tick: number; reason: EndReason };
 

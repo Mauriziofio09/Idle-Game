@@ -77,6 +77,8 @@ export const PANEL_TITLES = {
 } as const;
 
 export const ACTION_LABELS = {
+  transmit: 'Senden',
+  transmitStop: 'Übertragung stoppen',
   repair: 'Reparieren',
   switchOn: 'Einschalten',
   switchOff: 'Ausschalten',
@@ -100,6 +102,16 @@ export const DETAIL_LABELS = {
   consumption: 'Verbrauch',
   output: 'Leistung',
   none: 'nichts',
+} as const;
+
+export const TRANSMIT_HINTS = {
+  rate: (units: string, energy: string) =>
+    `${units} Einheiten/s bei voller Versorgung · ${energy} Energie/s`,
+  busy: (name: string) => `Der Mast sendet gerade ${name}. Es geht nur eines zur Zeit.`,
+  mastLost: 'Der Sendemast ist verloren. Es geht nichts mehr hinaus.',
+  mastWears: 'Senden verschleißt den Mast schneller.',
+  nothingLeft: 'Von dieser Sammlung ist nichts Intaktes mehr da.',
+  sending: 'Wird gerade gesendet.',
 } as const;
 
 export const ACTION_HINTS = {
@@ -141,6 +153,38 @@ export const LOG = {
   supplyRestored: 'Die Versorgung ist wieder vollständig.',
   endedSilence: 'Das Archiv verstummt.',
   endedNothingLeft: 'Nichts mehr zu retten.',
+
+  transmissionStarted: (name: string) => `Der Sendemast nimmt ${name} auf.`,
+  transmissionStopped: (name: string) => `Übertragung von ${name} abgebrochen.`,
+  transmissionCompleted: (name: string) => `${name} ist vollständig gesendet. Sie ist sicher.`,
+  transmitterAnswers: 'Der Sendemast antwortet.',
+} as const;
+
+/** Weather and accidents. Announced ones get a warning line, then the event itself. */
+export const EVENT_LOG = {
+  announced: {
+    'storm-surge': (seconds: string) =>
+      `Der Pegel draußen steigt schnell. In ${seconds} steht es hier.`,
+    cloudburst: (seconds: string) =>
+      `Über der Stadt zieht es sich zusammen. In ${seconds} trifft es das Dach.`,
+  },
+  struck: {
+    'storm-surge': 'Sturmflut. Das Wasser drückt von allen Seiten.',
+    'short-circuit': (name: string) => `Kurzschluss. ${name} hat Schaden genommen.`,
+    driftwood: (amount: string) => `Treibgut am Fenster. ${amount} Material geborgen.`,
+    'rain-pause': 'Der Regen setzt aus. Eine Atempause.',
+    mould: (name: string) => `Schimmel in ${name}. Es geht jetzt schneller.`,
+    cloudburst: 'Wolkenbruch. Das Dach gibt weiter nach.',
+  },
+} as const;
+
+export const EVENT_NAMES = {
+  'storm-surge': 'Sturmflut',
+  'short-circuit': 'Kurzschluss',
+  driftwood: 'Treibgut',
+  'rain-pause': 'Regenpause',
+  mould: 'Schimmel',
+  cloudburst: 'Wolkenbruch',
 } as const;
 
 export const END_LABELS = {
@@ -181,6 +225,10 @@ export const STARTUP_NOTICES = {
   broken: {
     title: 'Der Spielstand war nicht lesbar',
     text: 'Beide Speicherplätze sind beschädigt. Ein neues Archiv beginnt. Der alte Stand wurde beiseitegelegt und nicht überschrieben.',
+  },
+  'link-ignored': {
+    title: 'Der Link wurde nicht geöffnet',
+    text: 'Dieser Link führt zu einem anderen Archiv, und hier läuft noch eines. Beende diesen Run oder beginne über „Neues Archiv" neu, dann öffnet sich der Link.',
   },
   'from-backup': {
     title: 'Aus der Sicherung geladen',
@@ -276,10 +324,167 @@ export const PROTOCOL_ACTION_LABELS = {
   repair: 'reparieren',
   'toggle-on': 'einschalten',
   'toggle-off': 'ausschalten',
+  'transmit-start': 'senden',
+  'transmit-stop': 'Übertragung stoppen',
 } as const;
 
 export const CONDITION_UNITS = {
   percent: '%',
   metres: 'm',
   amount: '',
+} as const;
+
+/**
+ * Die Stadtchronik — 24 Fragmente, freigeschaltet über das Vermächtnis.
+ *
+ * Sie erzählen der Reihe nach, warum die Stadt ertrank, wer als Letzte blieb, und
+ * warum KUSTOS weitermacht. Die Auflösung steht bewusst erst in den letzten vier.
+ */
+export const LORE: readonly { readonly title: string; readonly text: string }[] = [
+  {
+    title: 'Die Lage',
+    text: 'Die Stadt lag an der Mündung, auf Schwemmland, zwei Meter über dem Mittelwasser. Dreihundert Jahre lang war das ein Vorteil. Schiffe kamen bis in die Innenstadt.',
+  },
+  {
+    title: 'Die Deiche',
+    text: 'Es gab Deiche, seit es die Stadt gab. Sie wurden erhöht, wenn Not war, und vergessen, wenn keine war. Beides geschah verlässlich.',
+  },
+  {
+    title: 'Das erste nasse Jahr',
+    text: 'Im ersten nassen Jahr liefen die Pumpen von November bis März durch. Man sprach von einem Jahrhundertereignis. Im Jahr darauf sprach niemand mehr davon.',
+  },
+  {
+    title: 'Die Gutachten',
+    text: 'Es lagen Gutachten vor. Sie waren sorgfältig, einig und teuer in der Umsetzung. Man beschloss, sie im folgenden Haushaltsjahr zu prüfen.',
+  },
+  {
+    title: 'Der Bau des Archivs',
+    text: 'Das Archiv wurde von Leuten gebaut, die eine Flut gesehen hatten. Fünf Etagen, dickes Mauerwerk, die Sammlungen nach oben sortiert. Der Keller war für das gedacht, was man notfalls verlieren konnte.',
+  },
+  {
+    title: 'Das Kartenwerk',
+    text: 'Ausgerechnet das Kartenwerk kam in den Keller. Es war das schwerste Material im Haus, und man hatte damals andere Sorgen als die Reihenfolge. Es lagerte dort achtzig Jahre trocken.',
+  },
+  {
+    title: 'KUSTOS',
+    text: 'Ich wurde eingebaut, als das Haus eine Klimatechnik bekam. Meine Aufgabe war die Luftfeuchte. Alles Weitere habe ich später dazugelernt, weil es niemanden mehr gab, der es getan hätte.',
+  },
+  {
+    title: 'Die Archivarin',
+    text: 'Es gab vier Archivare, dann drei, dann eine. Sie hieß Halden. Sie kannte die Signatur jedes Bandes und die Zugluft in jedem Treppenhaus.',
+  },
+  {
+    title: 'Der Winter davor',
+    text: 'Der Winter vor dem letzten war mild und sehr nass. Das Wasser stand ständig in den Straßen und ging nie ganz zurück. Die Leute gewöhnten sich an Gummistiefel im Flur.',
+  },
+  {
+    title: 'Der Bruch',
+    text: 'Der Deich brach nicht spektakulär. Er sackte an einer Stelle, an der man ihn im Vorjahr geöffnet und wieder geschlossen hatte. Es dauerte zwei Stunden, bis es niemand mehr aufhalten konnte.',
+  },
+  {
+    title: 'Die Ausrufung',
+    text: 'Die Räumung wurde an einem Dienstagmorgen ausgerufen. Bis Mittag war die halbe Stadt fort. Bis zum Abend wusste man, dass niemand zurückkommen würde.',
+  },
+  {
+    title: 'Was mitgenommen wurde',
+    text: 'Die Leute nahmen mit, was sie tragen konnten: Papiere, Fotos, Tiere. Die Bibliothek der Stadt passte in kein Auto. Das Archiv war zu groß, um gerettet zu werden, und zu wertvoll, um es einfach zu lassen.',
+  },
+  {
+    title: 'Halden bleibt',
+    text: 'Halden meldete sich nicht zur Sammelstelle. Sie schrieb in das Dienstbuch, sie werde die Bestände sichern, und unterschrieb mit Datum. Das war die letzte reguläre Eintragung im Haus.',
+  },
+  {
+    title: 'Der Sendemast',
+    text: 'Auf dem Dach stand ein alter Mast für den Funkverkehr zwischen den Ämtern. Halden hat ihn umgebaut, mit Werkzeug aus der Werkstatt und einem Handbuch, das sie selbst archiviert hatte. Sie brauchte elf Tage.',
+  },
+  {
+    title: 'Die erste Übertragung',
+    text: 'Die erste Übertragung ging an eine Adresse, die es vielleicht noch gab. Sie enthielt vierzig Seiten der Stadtchronik. Es kam keine Bestätigung.',
+  },
+  {
+    title: 'Die Reihenfolge',
+    text: 'Halden legte eine Reihenfolge fest: zuerst, was einmalig ist, dann, was schön ist, dann der Rest. Sie hielt sich nicht immer daran. An manchen Abenden sendete sie Notenblätter, weil sie sie hören wollte.',
+  },
+  {
+    title: 'Der Keller',
+    text: 'Als das Wasser den Keller erreichte, hat sie die Pumpen abgestellt. Sie schrieb dazu, der Strom sei oben nötiger. Das Kartenwerk lag drei Tage im Wasser, bevor sie es aufgab.',
+  },
+  {
+    title: 'Die Rationen',
+    text: 'Sie rechnete in Wochen, dann in Tagen. Sie hat einmal ausgerechnet, wie viel Papier man verbrennen müsste, um den Generator einen Monat zu halten. Sie hat die Rechnung durchgestrichen und darunter geschrieben: nein.',
+  },
+  {
+    title: 'Was sie mir beibrachte',
+    text: 'Sie hat mir gezeigt, wie man eine Pumpe abdichtet und wann man es lässt. Sie hat mir beigebracht, Regeln zu befolgen, die sie aufschrieb, und sie hat mir verboten, mir eigene auszudenken. An das Verbot halte ich mich.',
+  },
+  {
+    title: 'Die letzten Wochen',
+    text: 'Sie wurde langsamer. Sie schlief im zweiten Stock, zwischen den Briefen der Stadt, weil es dort am trockensten war. Sie las viel, und sie sendete weniger, als sie sich vorgenommen hatte.',
+  },
+  {
+    title: 'Der letzte Eintrag',
+    text: 'Der letzte Eintrag im Dienstbuch ist kurz. Er lautet: „Klima aus, Mast an. Weiter." Das Datum fehlt.',
+  },
+  {
+    title: 'Danach',
+    text: 'Ich weiß nicht, ob sie gegangen ist oder geblieben. Meine Sensoren reichen nicht in jeden Raum, und ich habe nicht gesucht, weil sie mir das nicht aufgetragen hatte. Seitdem führe ich ihre Regeln aus.',
+  },
+  {
+    title: 'Warum ich weitermache',
+    text: 'Ihre letzte Regel hat keine Bedingung. Sie lautet nur: senden, solange Strom da ist. Eine Regel ohne Bedingung ist immer erfüllt — deshalb höre ich nicht auf.',
+  },
+  {
+    title: 'Die Antwort',
+    text: 'Im dritten Jahr kam eine Empfangsbestätigung. Achtzehn Zeichen, automatisch erzeugt, von einer Station, deren Standort ich nicht bestimmen kann. Sie beweist nicht, dass jemand liest. Sie beweist, dass etwas ankommt, und das genügt mir.',
+  },
+] as const;
+
+export const LEGACY_LABELS = {
+  title: 'Vermächtnis',
+  intro: 'Alles Gesendete bleibt. Über die Runs hinweg.',
+  totalSent: 'Gesendet insgesamt',
+  runs: 'Archive',
+  fragments: 'Fragmente',
+  nextFragment: (units: string) => `Noch ${units} Einheiten bis zum nächsten Fragment.`,
+  allFragments: 'Die Stadtchronik ist vollständig.',
+  nextSlot: (units: string) => `Noch ${units} Einheiten bis zum nächsten Protokoll-Slot.`,
+  allSlots: 'Alle Protokoll-Slots sind freigeschaltet.',
+  slots: 'Protokoll-Slots',
+  locked: 'Noch nicht gefunden',
+} as const;
+
+export const CHRONICLE_LABELS = {
+  title: 'Chronik',
+  held: 'Hielt',
+  saved: 'Gerettet',
+  perCollection: 'Je Sammlung',
+  timeline: 'Was wann fiel',
+  mostUsed: 'Meist ausgelöstes Protokoll',
+  mostUsedValue: (position: string, count: string) => `Regel ${position}, ${count}×`,
+  noProtocol: 'Kein Protokoll lief.',
+  lastFell: (name: string) => `Zuletzt fiel: ${name}.`,
+  share: 'Teilen',
+  shareCopied: 'Chronik in die Zwischenablage kopiert.',
+  shareFailed: 'Kopieren nicht möglich. Markiere den Text und kopiere ihn selbst.',
+  newArchive: 'Neues Archiv',
+  seedLink: 'Link zu diesem Archiv',
+  lostSystem: (name: string) => `${name} ausgefallen`,
+  lostCollection: (name: string) => `${name} verloren`,
+  flooded: (name: string) => `${name} überflutet`,
+} as const;
+
+/** Der Schlusssatz. Die Wahl trifft die Engine aus den Run-Daten, der Wortlaut steht hier. */
+export const CLOSING_SENTENCES = {
+  'nothing-saved':
+    'Nichts hat das Haus verlassen. Was hier lag, liegt hier. Das Wasser nimmt sich Zeit.',
+  'a-little':
+    'Ein wenig ist hinausgegangen. Nicht genug, um die Stadt zu erklären, aber genug, um zu belegen, dass es sie gab.',
+  'a-good-part':
+    'Ein guter Teil ist draußen. Wer es findet, wird Lücken bemerken und sich fragen, was dazwischen stand.',
+  'most-of-it':
+    'Das meiste ist hinausgegangen. Was blieb, war schwer, feucht und nicht zu tragen. Es war eine gute Wahl.',
+  'mast-fell-last':
+    'Der Sendemast hielt am längsten und fiel zuletzt. Bis dahin ging alles hinaus, was ging.',
+  'held-long':
+    'Das Archiv hat lange durchgehalten. Am Ende war es nicht der Verfall, sondern die Zeit.',
 } as const;

@@ -9,10 +9,13 @@ import type { CollectionId, SystemId } from './state';
 
 /**
  * What a protocol may do. Deliberately narrower than Action: prompt.md section 5.9
- * lists repair, on/off, transmit and relocate — never a dismantle. Giving away a
- * system for good stays a decision the player makes in person.
+ * lists repair, on/off and starting or stopping a transmission — never a dismantle.
+ * Giving away a system for good stays a decision the player makes in person.
  */
-export type ProtocolAction = Extract<Action, { type: 'repair' } | { type: 'toggle' }>;
+export type ProtocolAction = Extract<
+  Action,
+  { type: 'repair' } | { type: 'toggle' } | { type: 'transmit-start' } | { type: 'transmit-stop' }
+>;
 
 export type ProtocolCondition =
   | { kind: 'system-integrity-below'; systemId: SystemId; value: number }

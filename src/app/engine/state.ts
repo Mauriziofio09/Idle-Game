@@ -19,7 +19,7 @@ import {
 import { createCursor, nextRange, seedToState } from './rng';
 import type { ProtocolRule } from './protocol-types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SYSTEM_IDS = [
   'generator',
@@ -67,6 +67,42 @@ export interface CollectionState {
 
 export type EndReason = 'silence' | 'nothing-left';
 
+/** The six things the weather and the wiring can do to the archive. */
+export const EVENT_KINDS = [
+  'storm-surge',
+  'short-circuit',
+  'driftwood',
+  'rain-pause',
+  'mould',
+  'cloudburst',
+] as const;
+export type EventKind = (typeof EVENT_KINDS)[number];
+
+/** Effects an event left behind, counted down tick by tick. */
+export interface ActiveEffects {
+  /** Multiplier on the rain, and how many ticks it still holds. */
+  inflowFactor: number;
+  inflowTicks: number;
+  /** A collection rotting faster than it should, and for how long. */
+  mouldId: CollectionId | null;
+  mouldTicks: number;
+}
+
+/** An event that has been announced but has not struck yet. */
+export interface PendingEvent {
+  kind: EventKind;
+  /** Ticks until it arrives. */
+  ticks: number;
+}
+
+/** What fell, and when. The chronicle reads this back as a timeline. */
+export interface ChronicleEntry {
+  tick: number;
+  kind: 'system-lost' | 'collection-lost' | 'floor-flooded';
+  /** A SystemId, a CollectionId, or a floor index as a string. */
+  id: string;
+}
+
 export interface GameState {
   schemaVersion: number;
   seed: string;
@@ -100,6 +136,11 @@ export interface GameState {
   /** Seconds remaining before the custodian depot may act again. */
   custodianCooldown: number;
 
+  effects: ActiveEffects;
+  pending: PendingEvent[];
+  /** Losses in the order they happened. Bounded by what the archive contains. */
+  chronicle: ChronicleEntry[];
+
   ended: boolean;
   endReason: EndReason | null;
 }
@@ -116,7 +157,10 @@ export function systemFloor(id: SystemId): FloorIndex {
  * A fresh archive. Start integrities are drawn from the seed, so `?archiv=4F2A`
  * always hands you the same building.
  */
-export function createInitialState(seed: string): GameState {
+export function createInitialState(
+  seed: string,
+  options: { protocolSlots?: number } = {},
+): GameState {
   const cursor = createCursor(seedToState(seed));
 
   const systems = {} as Record<SystemId, SystemState>;
@@ -157,9 +201,12 @@ export function createInitialState(seed: string): GameState {
     transmitting: null,
     supplyRatio: 1,
     protocols: [],
-    protocolSlots: PROTOCOLS.startingSlots,
+    protocolSlots: options.protocolSlots ?? PROTOCOLS.startingSlots,
     materialReserve: PROTOCOLS.defaultMaterialReserve,
     custodianCooldown: 0,
+    effects: { inflowFactor: 1, inflowTicks: 0, mouldId: null, mouldTicks: 0 },
+    pending: [],
+    chronicle: [],
     ended: false,
     endReason: null,
   };
@@ -182,6 +229,9 @@ export function cloneState(state: GameState): GameState {
     humidity: state.humidity.slice(),
     systems,
     collections,
+    effects: { ...state.effects },
+    pending: state.pending.map((event) => ({ ...event })),
+    chronicle: state.chronicle.slice(),
     // The nested condition and action must be copied too, or a rule edit would
     // reach back into the state it was cloned from.
     protocols: state.protocols.map((rule) => ({

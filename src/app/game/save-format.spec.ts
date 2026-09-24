@@ -1,5 +1,11 @@
 import { COLLECTIONS, PROTOCOLS } from '../engine/balance';
-import { createInitialState, SCHEMA_VERSION } from '../engine/state';
+import {
+  COLLECTION_IDS,
+  SYSTEM_IDS,
+  createInitialState,
+  SCHEMA_VERSION,
+} from '../engine/state';
+import { FLOOR_COUNT } from '../engine/balance';
 import { stateToSeed } from '../engine/rng';
 import { simulate } from '../engine/offline';
 import {
@@ -232,7 +238,16 @@ describe('migration', () => {
 
   it('carries a version 0 save all the way up, one step at a time', () => {
     const v0 = JSON.parse(JSON.stringify(createInitialState('9B01')));
-    for (const field of ['supplyRatio', 'protocols', 'protocolSlots', 'custodianCooldown', 'materialReserve']) {
+    for (const field of [
+      'supplyRatio',
+      'protocols',
+      'protocolSlots',
+      'custodianCooldown',
+      'materialReserve',
+      'effects',
+      'pending',
+      'chronicle',
+    ]) {
       delete v0[field];
     }
     v0.schemaVersion = 0;
@@ -243,6 +258,27 @@ describe('migration', () => {
     expect(result.file.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(result.file.state.supplyRatio).toBe(1);
     expect(result.file.state.materialReserve).toBe(PROTOCOLS.defaultMaterialReserve);
+  });
+
+  it('lifts a version 2 save by giving it weather and a timeline', () => {
+    const v2 = JSON.parse(JSON.stringify(createInitialState('4F2A')));
+    for (const field of ['effects', 'pending', 'chronicle']) {
+      delete v2[field];
+    }
+    v2.schemaVersion = 2;
+
+    const result = parseSaveFile(JSON.stringify({ schemaVersion: 2, savedAt: 1, state: v2 }));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.state.effects).toEqual({
+      inflowFactor: 1,
+      inflowTicks: 0,
+      mouldId: null,
+      mouldTicks: 0,
+    });
+    expect(result.file.state.pending).toEqual([]);
+    expect(result.file.state.chronicle).toEqual([]);
   });
 
   it('leaves a current save alone', () => {
@@ -328,5 +364,138 @@ describe('protocol rules in a save', () => {
     const base = JSON.parse(JSON.stringify(createInitialState('4F2A')));
     expect(validateState({ ...base, materialReserve: -1 })).toBeNull();
     expect(validateState({ ...base, materialReserve: 10_000 })).toBeNull();
+  });
+});
+
+describe('weather, announcements and the timeline in a save', () => {
+  const base = () => JSON.parse(JSON.stringify(createInitialState('4F2A')));
+
+  it('refuses an effect that would never expire', () => {
+    // The engine only ever clears a factor when its countdown runs out. A save that
+    // carries a factor with no countdown would switch off the rain, or the rot, for
+    // good — which would quietly remove the decay the whole game rests on.
+    expect(validateState({ ...base(), effects: { inflowFactor: 0, inflowTicks: 0, mouldId: null, mouldTicks: 0 } })).toBeNull();
+    expect(validateState({ ...base(), effects: { inflowFactor: 1, inflowTicks: 0, mouldId: 'maps', mouldTicks: 0 } })).toBeNull();
+    expect(validateState({ ...base(), effects: { inflowFactor: 1, inflowTicks: 0, mouldId: null, mouldTicks: 30 } })).toBeNull();
+
+    // The shapes the engine really produces are accepted.
+    expect(validateState({ ...base(), effects: { inflowFactor: 3, inflowTicks: 60, mouldId: null, mouldTicks: 0 } })).not.toBeNull();
+    expect(validateState({ ...base(), effects: { inflowFactor: 1, inflowTicks: 0, mouldId: 'maps', mouldTicks: 60 } })).not.toBeNull();
+  });
+
+  it('refuses nonsense in the effects', () => {
+    for (const effects of [
+      null,
+      {},
+      { inflowFactor: 'fast', inflowTicks: 0, mouldId: null, mouldTicks: 0 },
+      { inflowFactor: 1, inflowTicks: -1, mouldId: null, mouldTicks: 0 },
+      { inflowFactor: 99, inflowTicks: 10, mouldId: null, mouldTicks: 0 },
+      { inflowFactor: 1, inflowTicks: 0, mouldId: 'ghost', mouldTicks: 10 },
+    ]) {
+      expect(validateState({ ...base(), effects })).toBeNull();
+    }
+  });
+
+  it('refuses nonsense in the announcements', () => {
+    for (const pending of [
+      null,
+      [{ kind: 'weather', ticks: 5 }],
+      [{ kind: 'storm-surge' }],
+      [{ kind: 'storm-surge', ticks: -1 }],
+      [{ kind: 'storm-surge', ticks: 10_000 }],
+    ]) {
+      expect(validateState({ ...base(), pending })).toBeNull();
+    }
+    expect(validateState({ ...base(), pending: [{ kind: 'cloudburst', ticks: 20 }] })).not.toBeNull();
+  });
+
+  it('refuses a timeline longer than the archive can produce', () => {
+    // The bound comes from three checks together: each id must name something real,
+    // no loss may repeat, and the length is capped. The first two already limit the
+    // array to 18 entries, so the cap cannot be isolated in a test — it is the
+    // belt to their braces, and this asserts the bound they produce together.
+    const everyLoss = [
+      ...SYSTEM_IDS.map((id, i) => ({ tick: i, kind: 'system-lost' as const, id })),
+      ...COLLECTION_IDS.map((id, i) => ({ tick: 100 + i, kind: 'collection-lost' as const, id })),
+      ...Array.from({ length: FLOOR_COUNT }, (_, i) => ({
+        tick: 200 + i,
+        kind: 'floor-flooded' as const,
+        id: String(i),
+      })),
+    ];
+    // Exactly what a run can produce is still accepted.
+    expect(everyLoss.length).toBe(SYSTEM_IDS.length + COLLECTION_IDS.length + FLOOR_COUNT);
+    expect(validateState({ ...base(), chronicle: everyLoss })).not.toBeNull();
+
+    // One more than the archive contains is not.
+    const tooLong = [...everyLoss, { tick: 999, kind: 'system-lost' as const, id: 'pumps' }];
+    expect(validateState({ ...base(), chronicle: tooLong })).toBeNull();
+  });
+
+  it('refuses a timeline entry that names nothing in this archive', () => {
+    for (const entry of [
+      { tick: 1, kind: 'system-lost', id: 'banana' },
+      { tick: 1, kind: 'collection-lost', id: 'pumps' },
+      { tick: 1, kind: 'floor-flooded', id: '77' },
+      { tick: 1, kind: 'floor-flooded', id: '-1' },
+      { tick: 1, kind: 'floor-flooded', id: '2.0' },
+    ]) {
+      expect(validateState({ ...base(), chronicle: [entry] })).toBeNull();
+    }
+  });
+
+  it('refuses a transmission the mast could not be carrying', () => {
+    const lostMast = base();
+    lostMast.systems.transmitter = { integrity: 0, on: false, repairs: 0, lost: true };
+    lostMast.transmitting = 'maps';
+    expect(validateState(lostMast)).toBeNull();
+
+    const offMast = base();
+    offMast.systems.transmitter.on = false;
+    offMast.transmitting = 'maps';
+    expect(validateState(offMast)).toBeNull();
+
+    // On and intact is the only shape the engine can reach.
+    const sending = base();
+    sending.systems.transmitter.on = true;
+    sending.transmitting = 'maps';
+    expect(validateState(sending)).not.toBeNull();
+  });
+
+  it('refuses a lost collection that still holds units', () => {
+    const broken = base();
+    broken.collections.maps = { floor: 0, intact: 50, sent: 0, rotted: 50, lost: true };
+    expect(validateState(broken)).toBeNull();
+
+    const proper = base();
+    proper.collections.maps = { floor: 0, intact: 0, sent: 0, rotted: 100, lost: true };
+    expect(validateState(proper)).not.toBeNull();
+  });
+
+  it('refuses the same loss recorded twice', () => {
+    // The engine records each floor's flooding once. A timeline that repeats one is
+    // either corrupt or comes from a build whose invariant differed.
+    const repeated = [
+      { tick: 10, kind: 'floor-flooded', id: '0' },
+      { tick: 90, kind: 'floor-flooded', id: '0' },
+    ];
+    expect(validateState({ ...base(), chronicle: repeated })).toBeNull();
+  });
+
+  it('accepts a timeline the engine really produced', () => {
+    const played = simulate(createInitialState('4F2A'), 3000).state;
+    expect(played.chronicle.length).toBeGreaterThan(0);
+    expect(validateState(JSON.parse(JSON.stringify(played)))).not.toBeNull();
+  });
+
+  it('refuses nonsense in the timeline', () => {
+    for (const chronicle of [
+      null,
+      [{ tick: 1, kind: 'something', id: 'x' }],
+      [{ tick: -1, kind: 'system-lost', id: 'pumps' }],
+      [{ tick: 1, kind: 'system-lost', id: 5 }],
+    ]) {
+      expect(validateState({ ...base(), chronicle })).toBeNull();
+    }
   });
 });

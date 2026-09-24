@@ -4,7 +4,7 @@
       <app-icon name="archive" />
     </app-icon-box>
     <div class="titles">
-      <h1>{{ content.title }}</h1>
+      <h1 #pageTitle tabindex="-1">{{ content.title }}</h1>
       <p class="subtitle">{{ content.subtitle }} · {{ content.archivePrefix }}{{ seed() }}</p>
     </div>
   </header>
@@ -29,12 +29,9 @@
     </app-card>
   }
 
-  @if (endReason(); as reason) {
+  @if (ended()) {
     <app-card class="ending">
-      <h2>{{ reason }}</h2>
-      <p class="summary">
-        {{ endLabels.runtime }} {{ runtime() }} · {{ endLabels.saved }} {{ saved() }}
-      </p>
+      <app-chronicle (restarted)="onRestarted()" />
     </app-card>
   }
 
@@ -54,6 +51,10 @@
 
       <app-card [label]="titles.log">
         <app-archive-log />
+      </app-card>
+
+      <app-card [label]="legacyLabels.title">
+        <app-legacy />
       </app-card>
 
       <app-card [label]="settingsLabels.title">

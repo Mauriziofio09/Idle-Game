@@ -127,6 +127,35 @@ describe('water', () => {
     expect(step(base).state.water).toBeGreaterThanOrEqual(WATER.min);
   });
 
+  it('records a floor going under once, however often the level wobbles', () => {
+    // The pumps can out-pump the rain — during a rain pause, or when a protocol
+    // switches them on — so a floor crosses its line again and again. Each crossing is
+    // a rising edge; the timeline must still hold one entry, or the save validator's
+    // cap (18 losses) would reject a legitimate run and the player would lose it.
+    // Pumps off, so the rain actually carries the level over the line each time.
+    let state: GameState = applyAction(
+      { ...createInitialState('4F2A'), energy: ENERGY.capacity },
+      { type: 'toggle', systemId: 'pumps', on: false },
+    ).state;
+    let risingEdges = 0;
+
+    for (let cycle = 0; cycle < 8; cycle++) {
+      // Enter the tick just below the line; the rain carries it over.
+      const before = { ...state, water: 0.999 };
+      const result = step(before);
+      state = result.state;
+      expect(isFlooded(state, 0)).toBe(true);
+      risingEdges += result.events.filter((event) => event.type === 'floor-flooded').length;
+    }
+
+    // Eight genuine crossings...
+    expect(risingEdges).toBe(1);
+    // ...and exactly one line in the timeline.
+    const floods = state.chronicle.filter((entry) => entry.kind === 'floor-flooded');
+    expect(floods.length).toBe(1);
+    expect(floods[0].id).toBe('0');
+  });
+
   it('logs a floor going under exactly once', () => {
     const base = { ...createInitialState('4F2A'), water: 0.999, energy: ENERGY.capacity };
     const flooded = allSystemsOff(base);

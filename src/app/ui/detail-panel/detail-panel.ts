@@ -19,8 +19,9 @@ import {
   PANEL_TITLES,
   STATE_LABELS,
   SYSTEM_NAMES,
+  TRANSMIT_HINTS,
 } from '../../content/de';
-import { ENTROPY, REPAIR, SYSTEMS } from '../../engine/balance';
+import { ENTROPY, REPAIR, SYSTEMS, TRANSMIT } from '../../engine/balance';
 import { GameStore } from '../../game/game-store';
 import { systemFloor, type CollectionId, type SystemId } from '../../engine/state';
 import type { Selection } from '../../game/game-store';
@@ -48,6 +49,7 @@ export class DetailPanel {
   protected readonly titles = PANEL_TITLES;
   protected readonly actionLabels = ACTION_LABELS;
   protected readonly hints = ACTION_HINTS;
+  protected readonly transmitHints = TRANSMIT_HINTS;
   protected readonly labels = DETAIL_LABELS;
   protected readonly stateLabels = STATE_LABELS;
 
@@ -121,8 +123,42 @@ export class DetailPanel {
       sent: formatPercent(collection.sent),
       rotted: formatPercent(collection.rotted),
       lost: collection.lost,
+      transmitting: this.store.state().transmitting === id,
+      canTransmit: this.store.canApply({ type: 'transmit-start', collectionId: id }),
+      transmitHint: this.transmitHintFor(id),
+      rateHint: TRANSMIT_HINTS.rate(
+        formatResource(TRANSMIT.unitsPerSecond),
+        formatResource(TRANSMIT.energyPerSecond),
+      ),
     };
   });
+
+  /** Says why sending is unavailable, or what it will cost — never leaves it blank. */
+  private transmitHintFor(id: CollectionId): string {
+    const state = this.store.state();
+    if (state.systems.transmitter.lost) {
+      return TRANSMIT_HINTS.mastLost;
+    }
+    if (state.transmitting === id) {
+      return TRANSMIT_HINTS.sending;
+    }
+    const collection = state.collections[id];
+    if (collection.lost || collection.intact <= 0) {
+      return TRANSMIT_HINTS.nothingLeft;
+    }
+    if (state.transmitting !== null) {
+      return TRANSMIT_HINTS.busy(COLLECTION_NAMES[state.transmitting]);
+    }
+    return TRANSMIT_HINTS.mastWears;
+  }
+
+  protected transmit(id: CollectionId): void {
+    this.store.dispatch({ type: 'transmit-start', collectionId: id });
+  }
+
+  protected stopTransmit(): void {
+    this.store.dispatch({ type: 'transmit-stop' });
+  }
 
   protected readonly floor = computed(() => {
     const selection = this.selection();

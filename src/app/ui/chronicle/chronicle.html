@@ -1,0 +1,65 @@
+<h2>{{ labels.title }}</h2>
+@if (reason(); as reason) {
+  <p class="reason">{{ reason }}</p>
+}
+
+<dl class="facts">
+  <dt>{{ labels.held }}</dt>
+  <dd>{{ held() }}</dd>
+  <dt>{{ labels.saved }}</dt>
+  <dd>{{ saved() }}</dd>
+</dl>
+
+<p class="section-label">{{ labels.perCollection }}</p>
+<ul class="collections">
+  @for (entry of collections(); track entry.id) {
+    <li>
+      <span class="name">{{ entry.name }}</span>
+      <span
+        class="bar"
+        role="meter"
+        [attr.aria-label]="entry.name"
+        [attr.aria-valuenow]="entry.value"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        [attr.aria-valuetext]="entry.share"
+        >{{ entry.bar }}</span
+      >
+      <span class="share">{{ entry.share }}</span>
+    </li>
+  }
+</ul>
+
+@if (timeline().length > 0) {
+  <p class="section-label">{{ labels.timeline }}</p>
+  <ol class="timeline">
+    @for (entry of timeline(); track entry.key) {
+      <li>
+        <span class="time">{{ entry.time }}</span>
+        <span>{{ entry.text }}</span>
+      </li>
+    }
+  </ol>
+}
+
+<dl class="facts">
+  <dt>{{ labels.mostUsed }}</dt>
+  <dd>{{ mostUsed() }}</dd>
+</dl>
+
+@if (lastFell(); as last) {
+  <p class="closing">{{ last }}</p>
+}
+<p class="closing">{{ closing() }}</p>
+
+<div class="actions">
+  <app-button variant="secondary" (pressed)="share()">{{ labels.share }}</app-button>
+  @if (shareMessage(); as message) {
+    <p class="hint" role="status">{{ message }}</p>
+  }
+  @if (shareBody(); as body) {
+    <textarea class="code" readonly rows="8" [value]="body" [attr.aria-label]="labels.share">
+    </textarea>
+  }
+  <app-button variant="primary" (pressed)="newArchive()">{{ labels.newArchive }}</app-button>
+</div>

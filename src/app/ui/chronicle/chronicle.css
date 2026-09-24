@@ -1,0 +1,108 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+}
+
+.reason {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-button);
+  margin-top: calc(var(--space-3) * -1);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-body);
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.collections,
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-body);
+}
+
+.collections li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The only green in the chronicle: the share that got out. */
+.bar {
+  color: var(--color-sent);
+  letter-spacing: var(--letter-spacing-bar);
+}
+
+.share {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: var(--percent-column-width);
+  text-align: right;
+}
+
+.timeline li {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.time {
+  flex: none;
+  width: var(--log-time-width);
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.closing {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  border-top: var(--border);
+  padding-top: var(--space-3);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hint {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.code {
+  width: 100%;
+  padding: var(--space-2);
+  background: var(--color-surface-subtle);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-label);
+  color: var(--color-text-primary);
+  resize: vertical;
+  white-space: pre;
+}

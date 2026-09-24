@@ -14,7 +14,7 @@ import { applyAction, canApply, dismantleYield, repairPreview } from '../engine/
 import { ENERGY, ENTROPY, METRES_PER_FLOOR, UI_THRESHOLDS } from '../engine/balance';
 import { OFFLINE, TICK_MS } from '../engine/balance';
 import { simulateInChunks } from '../engine/offline';
-import { stateToSeed } from '../engine/rng';
+import { normaliseSeed, stateToSeed } from '../engine/rng';
 import {
   COLLECTION_IDS,
   SYSTEM_IDS,
@@ -30,12 +30,21 @@ import { decayMultiplier, demand, production } from '../engine/step';
 import { buildAwayReport, type AwayReport } from './away-report';
 import type { ProtocolCondition, ProtocolRule } from '../engine/protocol-types';
 import { cooldownSeconds, depotIsWorking } from '../engine/protocols';
+import {
+  bankRun,
+  fragmentsUnlocked,
+  protocolSlotsFor,
+  totalSent as legacyTotalSent,
+  unitsToNextFragment,
+  unitsToNextSlot,
+  type LegacyRecord,
+} from '../engine/legacy';
 import { PROTOCOLS } from '../engine/balance';
 import { describe, type LogEntry } from './log';
 import { SaveService } from './save';
 
 /** Why the archive did not come back the way it was left. */
-export type StartupNotice = 'broken' | 'from-backup' | null;
+export type StartupNotice = 'broken' | 'from-backup' | 'link-ignored' | null;
 
 /** What the player has focused in the cross-section. */
 export type Selection =
@@ -87,6 +96,13 @@ export class GameStore {
   private readonly _startupNotice = signal<StartupNotice>(null);
   readonly startupNotice = this._startupNotice.asReadonly();
 
+  private readonly _legacy = signal<LegacyRecord>(this.saves.readLegacy());
+  readonly legacy = this._legacy.asReadonly();
+  readonly legacyTotal = computed(() => legacyTotalSent(this._legacy()));
+  readonly legacyFragments = computed(() => fragmentsUnlocked(this._legacy()));
+  readonly legacyNextFragment = computed(() => unitsToNextFragment(this._legacy()));
+  readonly legacyNextSlot = computed(() => unitsToNextSlot(this._legacy()));
+
   constructor() {
     this.openLog();
   }
@@ -99,10 +115,29 @@ export class GameStore {
    * counts as zero; beyond the window the archive goes into emergency stasis and
    * simply does not decay further.
    */
-  initialize(now: number): AwayReport | null {
+  initialize(now: number, linkedSeed: string | null = null): AwayReport | null {
     this.simulatedUntilMs = now;
 
+    const seedFromLink = linkedSeed ? normaliseSeed(linkedSeed) : null;
     const outcome = this.saves.load();
+
+    // A shared link asks for a specific archive. It is honoured when nothing would be
+    // destroyed: no save at all, a save of that same archive, or a run already over.
+    if (seedFromLink) {
+      const saved = outcome.kind === 'loaded' ? outcome.save.file.state : null;
+      if (!saved || saved.seed === seedFromLink || saved.ended) {
+        if (saved?.seed !== seedFromLink) {
+          // No banking here. At this point `_state` still holds the placeholder the
+          // field initializer built; banking it would count an archive that was never
+          // played and inflate the run counter the legacy panel shows.
+          this.beginArchive(seedFromLink, now);
+          return null;
+        }
+      } else {
+        this._startupNotice.set('link-ignored');
+      }
+    }
+
     if (outcome.kind === 'broken') {
       // Both slots are unreadable. Say so rather than handing over a new archive
       // as if nothing had happened; the unreadable data is kept aside meanwhile.
@@ -110,6 +145,13 @@ export class GameStore {
       return null;
     }
     if (outcome.kind !== 'loaded') {
+      // No archive to restore, so this is a first run — and it starts with the slots
+      // the legacy has earned, not with the bare minimum.
+      this._state.set(
+        createInitialState(this._state().seed, {
+          protocolSlots: protocolSlotsFor(this._legacy()),
+        }),
+      );
       return null;
     }
     if (outcome.save.fromBackup) {
@@ -129,6 +171,11 @@ export class GameStore {
     const result = simulateInChunks(before, ticks);
     this._state.set(result.state);
     this.record(result.events.map((event) => ({ event, tick: event.tick })));
+    // A run can end during the catch-up just as easily as while being watched, and
+    // what it transmitted counts either way.
+    if (!before.ended && result.state.ended) {
+      this.bank(result.state);
+    }
 
     // Beyond the window nothing decayed, so the archive is current as of now.
     // Inside it, the state is current as of the last tick actually simulated.
@@ -168,6 +215,7 @@ export class GameStore {
     if (!result.ok) {
       return { ok: false, problem: result.problem };
     }
+    this.bankIfUnfinished();
     this._state.set(result.file.state);
     this.simulatedUntilMs = now;
     this._startupNotice.set(null);
@@ -177,10 +225,22 @@ export class GameStore {
     return { ok: true };
   }
 
-  /** Ends this run and starts a new archive. The legacy is untouched. */
-  startNewArchive(now = Date.now()): void {
+  /**
+   * Ends this run and starts a new archive. The legacy is untouched — and it decides how
+   * many protocol slots the next archive begins with.
+   */
+  startNewArchive(now = Date.now(), seed = freshSeed()): void {
+    // The run being replaced is real, so whatever it transmitted counts first.
+    this.bankIfUnfinished();
+    this.beginArchive(seed, now);
+  }
+
+  /** Puts a new archive in place. Banking, if any, is the caller's decision. */
+  private beginArchive(seed: string, now: number): void {
     this.saves.clearRun();
-    this._state.set(createInitialState(freshSeed()));
+    this._state.set(
+      createInitialState(seed, { protocolSlots: protocolSlotsFor(this._legacy()) }),
+    );
     this.simulatedUntilMs = now;
     this._startupNotice.set(null);
     this._selection.set(null);
@@ -197,10 +257,14 @@ export class GameStore {
     if (ticks <= 0 || this._state().ended) {
       return;
     }
+    const wasEnded = this._state().ended;
     const result = simulateInChunks(this._state(), ticks);
     this._state.set(result.state);
     this.simulatedUntilMs += ticks * TICK_MS;
     this.record(result.events.map((event) => ({ event, tick: event.tick })));
+    if (!wasEnded && result.state.ended) {
+      this.bank(result.state);
+    }
   }
 
   dispatch(action: Action): boolean {
@@ -322,6 +386,33 @@ export class GameStore {
 
   entropyPerDismantle(): number {
     return ENTROPY.perDismantle;
+  }
+
+  /**
+   * Folds a finished run into the legacy, once. Everything transmitted counts for good;
+   * prompt.md 5.12 keeps the unlocks to knowledge and options, never to multipliers.
+   */
+  private bank(state: GameState): void {
+    const banked = bankRun(this._legacy(), state);
+    this._legacy.set(banked);
+    this.saves.writeLegacy(banked);
+    // Write the ended run straight away. Leaving it to the next autosave would let a
+    // reload re-simulate the same interval, end the run again, and bank it twice.
+    this.saves.write(state, this.simulatedUntilMs);
+  }
+
+  /**
+   * Folds a run that is being thrown away into the legacy first.
+   *
+   * prompt.md 5.12: everything transmitted counts, permanently. Resetting mid-run or
+   * importing over a live archive must not quietly delete what already got out. A run
+   * that has already ended was banked when it ended, so it is skipped.
+   */
+  private bankIfUnfinished(): void {
+    const state = this._state();
+    if (!state.ended) {
+      this.bank(state);
+    }
   }
 
   private openLog(): void {

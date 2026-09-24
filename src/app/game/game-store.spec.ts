@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOG } from '../content/de';
-import { OFFLINE, PROTOCOLS } from '../engine/balance';
+import { LEGACY, OFFLINE, PROTOCOLS, SYSTEMS } from '../engine/balance';
+import { demand, production } from '../engine/step';
 import { simulate } from '../engine/offline';
 import { createInitialState } from '../engine/state';
 import { SaveService } from './save';
@@ -99,12 +100,20 @@ describe('GameStore', () => {
   });
 
   it('reports the net energy rate the resource bar shows', () => {
-    // Everything on: the generator cannot cover pumps, climate and the depot.
-    expect(store.energyRate()).toBeLessThan(0);
-    store.dispatch({ type: 'toggle', systemId: 'pumps', on: false });
+    // The starting integrities are drawn from the seed, so the sign at tick 0 varies.
+    // What must always hold is that the figure is production minus demand, and that
+    // switching a consumer off raises it by exactly that consumer's draw.
+    const rate = () => production(store.state()) - demand(store.state());
+    expect(store.energyRate()).toBeCloseTo(rate(), 10);
+
+    const before = store.energyRate();
     store.dispatch({ type: 'toggle', systemId: 'climate', on: false });
+    expect(store.energyRate()).toBeCloseTo(before + SYSTEMS.climate.drawPerSecond, 10);
+
+    store.dispatch({ type: 'toggle', systemId: 'pumps', on: false });
     store.dispatch({ type: 'toggle', systemId: 'custodian', on: false });
-    expect(store.energyRate()).toBeGreaterThan(0);
+    // With nothing switched on, the whole of production is surplus.
+    expect(store.energyRate()).toBeCloseTo(production(store.state()), 10);
   });
 
   it('keeps the log bounded during a long catch-up', () => {
@@ -122,6 +131,24 @@ describe('GameStore', () => {
     it('starts a fresh archive when there is nothing saved', () => {
       expect(store.initialize(NOW)).toBeNull();
       expect(store.state().tick).toBe(0);
+    });
+
+    it('gives a first run the protocol slots the legacy has earned', () => {
+      TestBed.inject(SaveService).writeLegacy({
+        schemaVersion: 1,
+        sent: { maps: LEGACY.slotThresholds[0] },
+        runs: 1,
+      });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+      reloaded.initialize(NOW);
+
+      // Earning a slot must not require starting yet another archive to see it.
+      expect(reloaded.protocolSlots()).toBe(PROTOCOLS.startingSlots + 1);
     });
 
     it('restores a saved archive and simulates the time away', () => {
@@ -210,18 +237,109 @@ describe('GameStore', () => {
       expect(report?.lostSystems.length).toBeGreaterThan(0);
     });
 
-    it('starts a new archive without touching the legacy', () => {
+    it('banks a run that ends while the player is away', () => {
+      const saves = TestBed.inject(SaveService);
+      const state = createInitialState('4F2A');
+      state.collections.maps.sent = 40;
+      state.collections.maps.intact = 60;
+      saves.write(state, NOW);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const report = reloaded.initialize(NOW + 60 * 60 * 1000);
+      expect(report?.endedWhileAway).toBe(true);
+
+      // What left the building counts, whether anyone watched it go or not.
+      expect(reloaded.legacy().runs).toBe(1);
+      expect(reloaded.legacyTotal()).toBeGreaterThanOrEqual(40);
+    });
+
+    it('banks a finished run exactly once, however often it is reloaded', () => {
+      store.dispatch({ type: 'transmit-start', collectionId: 'maps' });
+      store.advance(24 * 60 * 60);
+      expect(store.state().ended).toBe(true);
+
+      const banked = store.legacy();
+      expect(banked.runs).toBe(1);
+      expect(banked.sent['maps']).toBeGreaterThan(0);
+
+      // A second advance in the same session changes nothing...
+      store.advance(600);
+      expect(store.legacy().runs).toBe(1);
+
+      // ...and neither does reloading the finished archive, twice. Without the guard
+      // every reload would re-simulate the same interval and bank the run again.
+      for (let reload = 0; reload < 2; reload++) {
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          providers: [{ provide: GAME_STORAGE, useValue: storage }],
+        });
+        const reloaded = TestBed.inject(GameStore);
+        reloaded.initialize(NOW + (reload + 1) * 60 * 60 * 1000);
+
+        expect(reloaded.state().ended).toBe(true);
+        expect(reloaded.legacy().runs).toBe(1);
+        expect(reloaded.legacy().sent['maps']).toBeCloseTo(banked.sent['maps'], 6);
+      }
+    });
+
+    it('does not count an archive opened from a seed link as a run', () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const linked = TestBed.inject(GameStore);
+
+      linked.initialize(NOW, '4F2A');
+
+      expect(linked.seed()).toBe('4F2A');
+      // Nothing has been played yet, so the legacy must still read zero archives.
+      expect(linked.legacy().runs).toBe(0);
+      expect(linked.legacyTotal()).toBe(0);
+    });
+
+    it('keeps the legacy when a run is abandoned, and banks what it sent', () => {
       const saves = TestBed.inject(SaveService);
       saves.writeLegacy({ schemaVersion: 1, sent: { maps: 12 }, runs: 2 });
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const fresh = TestBed.inject(GameStore);
+      fresh.initialize(NOW);
+
+      // Send a little, then give up on this archive.
+      fresh.dispatch({ type: 'transmit-start', collectionId: 'maps' });
+      fresh.advance(120);
+      const sentThisRun = fresh.state().collections.maps.sent;
+      expect(sentThisRun).toBeGreaterThan(0);
+
+      const before = fresh.seed();
+      fresh.startNewArchive();
+
+      expect(fresh.state().tick).toBe(0);
+      expect(fresh.seed()).not.toBe(before);
+      // prompt.md 5.12: everything transmitted counts, even from a run thrown away.
+      expect(fresh.legacy().sent['maps']).toBeCloseTo(12 + sentThisRun, 6);
+      expect(fresh.legacy().runs).toBe(3);
+    });
+
+    it('banks what an import replaces', () => {
+      const saves = TestBed.inject(SaveService);
+      store.dispatch({ type: 'transmit-start', collectionId: 'maps' });
       store.advance(120);
-      store.persist();
+      const sent = store.state().collections.maps.sent;
+      expect(sent).toBeGreaterThan(0);
 
-      const before = store.seed();
-      store.startNewArchive();
+      const other = createInitialState('9B01');
+      expect(store.importRun(saves.exportRun(other, NOW))).toEqual({ ok: true });
 
-      expect(store.state().tick).toBe(0);
-      expect(store.seed()).not.toBe(before);
-      expect(saves.readLegacy()).toMatchObject({ sent: { maps: 12 }, runs: 2 });
+      expect(store.legacy().sent['maps']).toBeCloseTo(sent, 6);
     });
 
     it('replaces the run on a good import and refuses a bad one', () => {

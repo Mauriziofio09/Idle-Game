@@ -1,0 +1,73 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.intro {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--font-size-body);
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.per-collection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-body);
+}
+
+.per-collection li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.value {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fragments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--border);
+  padding-top: var(--space-4);
+}
+
+.fragments h3 {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--letter-spacing-tight);
+  margin-bottom: var(--space-2);
+}
+
+.fragments p {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}

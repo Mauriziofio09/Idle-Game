@@ -109,6 +109,44 @@ const protocolsOnly: Strategy = {
   decide: () => null,
 };
 
+/**
+ * The run the whole game is aiming at: send from the first second and let protocols
+ * keep the lights on. This is the strategy milestone 8 has to make worth playing.
+ */
+const sendEverything: Strategy = {
+  name: 'Senden und Protokolle',
+  setup: (state) => ({
+    ...state,
+    transmitting: 'maps',
+    systems: { ...state.systems, transmitter: { ...state.systems.transmitter, on: true } },
+    protocols: [
+      rule(
+        'p1',
+        { kind: 'energy-below', value: 30 },
+        { type: 'toggle', systemId: 'climate', on: false },
+      ),
+      rule(
+        'p2',
+        { kind: 'system-integrity-below', systemId: 'transmitter', value: 40 },
+        { type: 'repair', systemId: 'transmitter' },
+      ),
+    ],
+  }),
+  decide(state) {
+    // When a collection is finished or lost, move the mast to the next one that still
+    // has something in it — the decision the player would make.
+    if (state.transmitting === null) {
+      for (const id of COLLECTION_IDS) {
+        const action: Action = { type: 'transmit-start', collectionId: id };
+        if (canApply(state, action)) {
+          return action;
+        }
+      }
+    }
+    return null;
+  },
+};
+
 interface RunResult {
   seed: string;
   ticks: number;
@@ -238,7 +276,7 @@ function measureThroughput(): void {
 }
 
 function main(): void {
-  const strategies = [doNothing, repairWeakest, abandonCellar, protocolsOnly];
+  const strategies = [doNothing, repairWeakest, abandonCellar, protocolsOnly, sendEverything];
   const seeds = Array.from({ length: SEED_COUNT }, (_, i) => stateToSeed(i * 2654435761));
 
   console.log(`ENTROPIE · Headless-Simulation über ${seeds.length} Seeds`);

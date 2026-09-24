@@ -56,6 +56,8 @@
 
   --letter-spacing-tight: -0.02em; /* styles.md "tracking-tight" */
   --letter-spacing-label: 0.06em; /* DERIVED — for the uppercase section labels */
+  /* DERIVED 17 — the chronicle's bar glyphs need air to read as separate cells. */
+  --letter-spacing-bar: 0.1em;
   --line-height-none: 1; /* styles.md "leading-none" for stat numbers */
   --line-height-body: 1.5;
 
@@ -111,6 +113,8 @@
   --panel-column-min: 320px;
   --log-max-height: 320px;
   --log-time-width: 56px;
+  /* DERIVED 18 — a percentage column wide enough for "100 %", so the bars stay aligned. */
+  --percent-column-width: 3.5em;
   /* DERIVED 14 — the phone breakpoint, below which two chips per row keep the building
      readable. Documentation only; a @media rule cannot read a custom property. */
   --breakpoint-compact: 600px;

@@ -76,6 +76,26 @@
     <dt>{{ labels.rotted }}</dt>
     <dd>{{ collection.rotted }}</dd>
   </dl>
+
+  <div class="actions">
+    <div class="action">
+      @if (collection.transmitting) {
+        <app-button variant="secondary" (pressed)="stopTransmit()">
+          {{ actionLabels.transmitStop }}
+        </app-button>
+      } @else {
+        <app-button
+          variant="primary"
+          [disabled]="!collection.canTransmit"
+          (pressed)="transmit(collection.id)"
+        >
+          {{ actionLabels.transmit }}
+        </app-button>
+      }
+      <p class="hint">{{ collection.transmitHint }}</p>
+      <p class="hint">{{ collection.rateHint }}</p>
+    </div>
+  </div>
 } @else if (floor(); as floor) {
   <h2 #heading tabindex="-1">{{ floor.name }}</h2>
   <p class="meta">{{ labels.floor }} {{ floor.indexLabel }}</p>

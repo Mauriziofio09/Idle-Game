@@ -90,19 +90,38 @@
 
         <span class="word">{{ labels.thenWord }}</span>
 
-        <span class="select">
-          <select
-            class="field"
-            [attr.aria-label]="view.actionTargetLabel"
-            (change)="setActionSystem(view.rule, $any($event.target).value)"
-          >
-            @for (system of systems; track system.id) {
-              <option [value]="system.id" [selected]="system.id === view.actionSystem">
-                {{ system.name }}
-              </option>
-            }
-          </select>
-        </span>
+        @if (view.actionTargetKind === 'system') {
+          <span class="select">
+            <select
+              class="field"
+              [attr.aria-label]="view.actionTargetLabel"
+              (change)="setActionSystem(view.rule, $any($event.target).value)"
+            >
+              @for (system of systems; track system.id) {
+                <option [value]="system.id" [selected]="system.id === view.actionSystem">
+                  {{ system.name }}
+                </option>
+              }
+            </select>
+          </span>
+        } @else if (view.actionTargetKind === 'collection') {
+          <span class="select">
+            <select
+              class="field"
+              [attr.aria-label]="view.actionTargetLabel"
+              (change)="setActionCollection(view.rule, $any($event.target).value)"
+            >
+              @for (collection of collections; track collection.id) {
+                <option
+                  [value]="collection.id"
+                  [selected]="collection.id === view.actionCollection"
+                >
+                  {{ collection.name }}
+                </option>
+              }
+            </select>
+          </span>
+        }
 
         <span class="select">
           <select

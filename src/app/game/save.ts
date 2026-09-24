@@ -10,7 +10,10 @@
 
 import { Injectable, inject } from '@angular/core';
 
+import { emptyLegacy, LEGACY_SCHEMA_VERSION, type LegacyRecord } from '../engine/legacy';
 import type { GameState } from '../engine/state';
+
+export type { LegacyRecord };
 import {
   CURRENT_SCHEMA_VERSION,
   decodeExport,
@@ -27,14 +30,6 @@ export const BACKUP_KEY = 'entropie.save.backup';
 export const LEGACY_KEY = 'entropie.legacy';
 /** Where an unreadable save is set aside, so a later build could still rescue it. */
 export const BROKEN_KEY = 'entropie.save.broken';
-
-/** What survives a run. Milestone 5 fills this with unlocks and lore. */
-export interface LegacyRecord {
-  schemaVersion: number;
-  /** Units transmitted across every run, per collection. */
-  sent: Record<string, number>;
-  runs: number;
-}
 
 export interface LoadedSave {
   file: SaveFile;
@@ -118,7 +113,7 @@ export class SaveService {
   }
 
   readLegacy(): LegacyRecord {
-    const empty: LegacyRecord = { schemaVersion: CURRENT_SCHEMA_VERSION, sent: {}, runs: 0 };
+    const empty = emptyLegacy();
     const raw = this.readRaw(LEGACY_KEY);
     if (raw === null) {
       return empty;
@@ -136,7 +131,7 @@ export class SaveService {
         }
       }
       return {
-        schemaVersion: CURRENT_SCHEMA_VERSION,
+        schemaVersion: LEGACY_SCHEMA_VERSION,
         sent,
         runs: typeof record.runs === 'number' && record.runs >= 0 ? record.runs : 0,
       };

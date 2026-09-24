@@ -1,0 +1,35 @@
+<p class="intro">{{ labels.intro }}</p>
+
+<dl class="facts">
+  <dt>{{ labels.totalSent }}</dt>
+  <dd>{{ total() }}</dd>
+  <dt>{{ labels.runs }}</dt>
+  <dd>{{ runs() }}</dd>
+  <dt>{{ labels.slots }}</dt>
+  <dd>{{ slots() }}</dd>
+  <dt>{{ labels.fragments }}</dt>
+  <dd>{{ fragmentsLabel() }}</dd>
+</dl>
+
+<p class="intro">{{ nextFragment() }}</p>
+<p class="intro">{{ nextSlot() }}</p>
+
+<ul class="per-collection">
+  @for (entry of perCollection(); track entry.id) {
+    <li>
+      <span>{{ entry.name }}</span>
+      <span class="value">{{ entry.value }}</span>
+    </li>
+  }
+</ul>
+
+@if (fragments().length > 0) {
+  <ol class="fragments">
+    @for (fragment of fragments(); track fragment.index) {
+      <li>
+        <h3>{{ fragment.number }} · {{ fragment.title }}</h3>
+        <p>{{ fragment.text }}</p>
+      </li>
+    }
+  </ol>
+}

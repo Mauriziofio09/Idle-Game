@@ -1,7 +1,7 @@
 # PLAN.md — ENTROPIE · Das letzte Archiv
 
 Arbeitsplan zu `prompt.md`. Visuelle Quelle: `styles.md` (schreibgeschützt).
-Status: **M0–M4 fertig · wartet auf Feedback vor M5.**
+Status: **M0–M5 fertig · wartet auf Feedback vor M6.**
 
 ---
 
@@ -158,7 +158,8 @@ Tokens — keine neuen Farbtöne, keine neue Ästhetik:
 
 Kleinere Ableitungen, gleiche Regel (nur aus Vorhandenem gebaut, kein neuer Farbton):
 `--color-meter-track` = Hintergrund · `--font-size-h2` = die Stat-Größe 24px eine Stufe unter H1 ·
-`--letter-spacing-label` für die Versalien-Sektionslabels · `--line-height-body` für Fließtext ·
+`--letter-spacing-label` für die Versalien-Sektionslabels ·
+`--letter-spacing-bar` 0,1em, damit die Balkenglyphen der Chronik als getrennte Zellen lesbar bleiben · `--line-height-body` für Fließtext ·
 `--border-hairline` 1px für Trenner **innerhalb** einer Karte, damit zwei 2px-Rahmen nicht kollidieren ·
 `--space-7` 32px und `--space-8` 48px nur für Seitenrhythmus („generous whitespace") ·
 `--icon-size-md` 24px / `--icon-size-lg` 32px, weil `styles.md` die Box bemaßt, nicht das Zeichen ·
@@ -168,7 +169,7 @@ weil Schwarz auf Schwarz verschwindet ·
 `--floor-min-height` 76px / `--floor-min-height-compact` 64px / `--floor-tab-width` 92px /
 `--chip-min-width` 108px / `--chip-max-width` 180px — Maße des Querschnitts; `styles.md` bemaßt
 Karten, kein Gebäude, deshalb aus der Abstandsskala gebaut ·
-`--panel-column-min` 320px / `--log-max-height` 320px / `--log-time-width` 56px — Panel-Maße ·
+`--panel-column-min` 320px / `--log-max-height` 320px / `--log-time-width` 56px · `--percent-column-width` 3,5em für die Prozentspalte der Chronik ·
 `--breakpoint-compact` 600px — zweiter Umbruch, unterhalb dessen zwei Chips pro Reihe stehen,
 damit das Gebäude auf dem Handy lesbar bleibt (nur Dokumentation: `@media` kann keine
 Custom Property lesen) ·
@@ -286,13 +287,13 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Tests: Priorität · Abklingzeit · Bezahlbarkeit · keine Ausführung ohne Depot/Strom
 
 ### M5 · Ziel & Ende
-- [ ] Sendemast + Senden (eine Sammlung gleichzeitig), Mastverschleiß
-- [ ] Ereignisse (6 Stück, seed-basiert, Ankündigung 20 s bei Sturmflut/Wolkenbruch)
-- [ ] Run-Ende-Bedingungen + Tests
-- [ ] `chronicle`: Laufzeit · Gerettet gesamt/je Sammlung · Verlust-Zeitleiste · häufigstes Protokoll ·
+- [x] Sendemast + Senden (eine Sammlung gleichzeitig), Mastverschleiß
+- [x] Ereignisse (6 Stück, seed-basiert, Ankündigung 20 s bei Sturmflut/Wolkenbruch)
+- [x] Run-Ende-Bedingungen + Tests
+- [x] `chronicle`: Laufzeit · Gerettet gesamt/je Sammlung · Verlust-Zeitleiste · häufigstes Protokoll ·
       generierter Schlusssatz
-- [ ] Teilen: Clipboard + Web Share API · Seed-Link `?archiv=XXXX`
-- [ ] Vermächtnis + 24 Lore-Fragmente + „Neues Archiv"
+- [x] Teilen: Clipboard + Web Share API · Seed-Link `?archiv=XXXX`
+- [x] Vermächtnis + 24 Lore-Fragmente + „Neues Archiv"
 
 ### M6 · Tiefe (SOLL)
 - [ ] Umlagern (30 s unterwegs, max. 3 pro Etage)
@@ -440,7 +441,11 @@ füllen eine Lücke — alle vier stehen auch als Kommentar an der jeweiligen Co
 3. **Verfall unter Wasser** (`balance.ts`, `SYSTEM_DECAY.floodedExtraPerSecond = 1,5 %/s`).
    Abschnitt 5.3 sagt nur „verliert zusätzlich schnell Integrität". Gewählt: ein versunkenes
    System ist in gut einer Minute weg. Tunbar in M8.
-4. **Feuchte-Zielwerte** (`balance.ts`, `HUMIDITY`). Abschnitt 5.5 beschreibt die Form
+4. **Senden unter Unterversorgung** (`engine/step.ts`, `transmitRate`). Abschnitt 5.7 schreibt
+   `0,2 × I_Mast/100` ohne Versorgungsterm. Wie bei Pumpen und Klimatechnik skaliere ich mit
+   `supplyRatio`, weil 5.6 das für jeden eingeschalteten Verbraucher vorschreibt — und der Mast
+   ist der hungrigste im Haus.
+5. **Feuchte-Zielwerte** (`balance.ts`, `HUMIDITY`). Abschnitt 5.5 beschreibt die Form
    (Grundfeuchte + Wassernähe + Dachleck − Klima, weich angenähert), nennt aber keine Zahlen.
    Gewählt: Grundfeuchte `20 + 0,25 × S`, Wassernähe `45` über `2` Etagen Reichweite,
    Glättung `2 %` des Restabstands pro Sekunde (Zeitkonstante ~50 s). Alle in `balance.ts`.
@@ -633,3 +638,128 @@ bleibt; er lässt jetzt das Depot ablehnen und den Spieler dieselbe Ausgabe tät
 Chunk-Invarianz **mit Regeln im Zustand** (der Determinismus-Test lief bisher immer mit leerer
 Regelliste) und sieben Tests für die Regel-API im Store — Slot-Grenze, eindeutige IDs, Zähler
 überlebt Umsortieren und Bearbeiten, Reserve-Klemmung, Regeln überleben Speichern und Laden.
+
+---
+
+## 13 · Stand nach M5
+
+Gebaut: `engine/events.ts` (sechs Ereignisse, seed-gezogen, zwei angekündigt),
+Senden in `actions.ts` und `step.ts`, `engine/chronicle.ts`, `engine/legacy.ts`,
+`game/share.ts`, `ui/chronicle`, `ui/legacy`, Sende-Aktionen im Protokoll-Editor,
+Seed-Links, Schema 3 mit Migration 2→3, 24 Lore-Fragmente.
+
+**Entscheidungen:**
+22. **Der Schlusssatz wird in der Engine gewählt, formuliert in `de.ts`.** `buildChronicle`
+    gibt einen Schlüssel zurück (`mast-fell-last`, `a-little` …), den `CLOSING_SENTENCES`
+    in einen Satz übersetzt. So entscheidet der Run über den Ton, ohne dass Text in die
+    Engine wandert. Fällt der Sendemast zuletzt, schlägt das die Arithmetik — das ist die
+    sprechendere Tatsache.
+23. **Der Seed-Link zerstört nichts.** `?archiv=4F2A` startet dieses Archiv, wenn nichts
+    verloren geht: kein Spielstand vorhanden, derselbe Seed, oder der Run ist vorbei.
+    Läuft ein anderes Archiv, sagt ein Hinweis, warum der Link nicht geöffnet wurde.
+24. **Protokolle dürfen senden.** `prompt.md` 5.9 listet „Senden starten/stoppen" — die
+    Aktion, die eine Nacht überhaupt erst wertvoll macht. Rückbau bleibt ausgeschlossen.
+25. **Ein gefeuertes Ereignis ohne Ziel passiert nicht.** Kurzschluss ohne laufendes System
+    und Schimmel ohne lebende Sammlung erzeugen kein Domain-Event und keine Log-Zeile,
+    statt eine Meldung über nichts zu schreiben.
+
+**Im Browser nachgewiesen:** Senden schreibt „Der Sendemast nimmt Sprachen der Welt auf."
+und bewegt Einheiten · die Chronik zeigt nach einem Run „Hielt 00:10:58 · Gerettet 4 %",
+Balken je Sammlung, die Verlust-Zeitleiste („05:52 Keller überflutet · 08:19 Kartenwerk
+verloren · 08:22 Pumpen ausgefallen") und den Schlusssatz · das Vermächtnis zählt 75
+Einheiten, 3 Fragmente und 3 Slots · `?archiv=4F2A` startet genau dieses Archiv.
+
+**Zwei echte Fehler, die erst der Browser zeigte:**
+1. **Ein Run, der während des Aufholens endete, wurde nicht verbucht.** Ich hatte die
+   Verbuchung nur in `advance` eingebaut, nicht im Startpfad — genau der Fall, der beim
+   Zurückkommen nach einer Nacht eintritt. Das Vermächtnis blieb auf 0, obwohl 23 % einer
+   Sammlung gesendet worden waren.
+2. **Verdiente Protokoll-Slots wirkten erst nach einem weiteren Archivwechsel.** Der erste
+   Run nach dem Freischalten startete weiter mit zwei Slots.
+
+**Messung für M8:** Mit der Strategie „Senden und Protokolle" steht **Gerettet erstmals über
+0 %: Median 4,5 %** (P10 3,3 · P90 6,4). Das Ziel für gutes aktives Spiel sind 20–40 %.
+Gleichzeitig verkürzt Senden den Run von 11,9 auf 10,0 min, weil der Mast 1,5 E/s zieht,
+die das Archiv nicht hat. Damit ist der Balance-Befund vollständig: **Das Spiel funktioniert
+mechanisch in allen Teilen, aber die Startwerte lassen es nicht zu, dass sich Spielen lohnt.**
+Das ist die Arbeit von M8, und sie hat jetzt alle Zahlen, die sie braucht.
+
+### Nachträge aus der M5-Review
+
+Zehn Punkte. Behoben:
+
+1. **[schwer] Die Verlust-Zeitleiste wuchs unbegrenzt — und machte den Spielstand unladbar.**
+   `floor-flooded` wurde bei *jeder* steigenden Flanke verzeichnet. Der Pegel schwankt aber:
+   Die Pumpen überholen den Regen während einer Regenpause oder sobald ein Protokoll sie
+   einschaltet. Gemessen wurden 141 Einträge bei oszillierendem Pegel — der Validator lässt
+   18 zu, weil „jedes System, jede Sammlung, jede Etage einmal fallen kann". Beide Slots tragen
+   denselben Zustand, also hätte der Spieler den Run verloren und die Meldung „Der Spielstand
+   war nicht lesbar" bekommen. Die Engine verzeichnet jede Etage jetzt einmal, der Validator
+   lehnt Doppelungen ab, und der Log wiederholt „Das Wasser steht im Keller." nicht mehr.
+2. **[mittel] Eine Übertragung überlebte den Verlust und das Ausschalten des Masts.** Der
+   Rückbau-Pfad räumte auf, der Verschleiß-Pfad und das Ein/Aus nicht. Das Panel zeigte weiter
+   „Wird gerade gesendet.", während nichts mehr hinausging — genau die versteckte Mechanik,
+   die Säule 4 verbietet. Beide Wege melden jetzt `transmission-stopped`.
+3. **[mittel] „Neues Archiv" und Import warfen weg, was der Run gesendet hatte.** `prompt.md`
+   5.12 verlangt, dass alles Gesendete dauerhaft zählt. Beide verbuchen den aufgegebenen Run
+   jetzt vorher.
+4. **[mittel] Ein beim Aufholen verbuchter Run wurde nicht geschrieben** — bis zum nächsten
+   Autosave hätte ein Reload dasselbe Intervall erneut simuliert und alles doppelt verbucht.
+5. **[gering-mittel] Der Validator akzeptierte Effektzustände, die nie ablaufen.** Ein
+   bearbeiteter Spielstand mit `{inflowFactor: 0, inflowTicks: 0}` hätte den Regen für immer
+   abgestellt. Die Querbedingungen der Engine sind jetzt geprüft.
+6. **[gering] Wolkenbruch ohne Dach schrieb „Das Dach gibt weiter nach."** — eine Zeile über
+   nichts, und ein Widerspruch zur eigenen Entscheidung 25. Dazu eine tote Bedingung bei der
+   Kurzschluss-Auswahl entfernt.
+7. **[gering] Zwei Balance-Zahlen steckten in Texten** („1,5 Energie/s", „In zwanzig Sekunden")
+   — sie kommen jetzt aus `balance.ts` durch `format.ts`.
+8. **[gering] `letter-spacing: 0.1em`** war der einzige harte Wert im M5-CSS → Token 17.
+9. **[gering] Die Abweichung beim Senden war nicht dokumentiert** → `PLAN.md` Abschnitt 9, Nr. 4,
+   plus Kommentar am Code.
+10. **[gering] Nach „Neues Archiv" fiel der Fokus auf `<body>`** — beim wichtigsten Übergang
+    des Spiels. Erster Versuch war falsch: Ich wollte auf die Chronik-Überschrift fokussieren,
+    die mit dem Run verschwindet. Die Chronik meldet den Neustart jetzt nach oben, und die
+    Seite setzt den Fokus auf ihren eigenen Titel.
+
+**Tests ergänzt**, wo die Review Lücken sah: Ereignis-Stärken (Kurzschluss −15, Treibgut 15–30,
+Wolkenbruch −10), Effektdauern, die Wahrscheinlichkeit `0,08 × m(S)` pro Minute über 20 000
+simulierte Minuten, Ablehnung kaputter `effects`/`pending`/`chronicle`, Übertragung bei
+Mastverlust und Ausschalten, Vermächtnis über Reset und Import.
+
+**Beim Mutationstest aufgefallen:** Mein erster Flutungstest bestand auch ohne die Korrektur —
+er schaltete die Pumpen nicht ab, der Pegel schwankte also gar nicht. Jetzt erzwingt er acht
+echte Überschreitungen und schlägt ohne den Guard fehl.
+
+### Zweite M5-Review (unabhängiger Durchgang)
+
+Bestätigte alle sechs Korrekturen als echt behoben und fand acht weitere Punkte. Behoben:
+
+1. **[mittel] Ein Seed-Link verbuchte einen Phantom-Run.** `initialize` rief
+   `startNewArchive`, das den aufzugebenden Run verbucht — nur lag zu diesem Zeitpunkt noch
+   der Platzhalter aus dem Feld-Initialisierer im Store. Ohne einen einzigen Tick stand
+   „Archive 1" im Vermächtnis. Das Anlegen eines Archivs und das Verbuchen sind jetzt
+   getrennt; nur der echte Wechsel verbucht.
+2. **[mittel] Schimmel befiel vollständig gesendete Sammlungen.** Eine Sammlung, die
+   komplett hinausgegangen ist, behält `lost: false` bei `intact: 0` — sie wurde gerettet,
+   nicht verloren. Der Filter prüfte nur `lost`, also landete der Schimmel auf Papier, das
+   nicht mehr da ist, und schrieb „Schimmel in Kartenwerk. Es geht jetzt schneller." über
+   nichts. Genau der Fall, den Entscheidung 25 ausschließt — erreichbar im normalen Spiel,
+   denn eine Sammlung fertig zu senden ist das Ziel.
+3. **[gering-mittel] Drei Lücken im Validator**: ein Spielstand konnte eine laufende
+   Übertragung mit verlorenem oder ausgeschaltetem Mast behaupten, eine „verlorene"
+   Sammlung mit 50 intakten Einheiten führen (die dann nie verrotten, aber weiter als
+   „etwas zu retten" zählen, sodass der Run nie enden kann), und Chronik-Einträge mit
+   erfundenen IDs tragen, die Chronik und Teilen-Text wörtlich ausgeben („banana ausgefallen").
+4. **[gering] `min-width: 3.5em`** war doch nicht der einzige harte Wert im M5-CSS → Token 18.
+
+**Zwei meiner eigenen Tests konnten nicht fehlschlagen**, beide mutationsbelegt:
+„verbucht einen beendeten Run genau einmal" erreichte die Verzweigung gar nicht, weil
+`advance` bei `ended` vorher zurückkehrt — er lädt jetzt zweimal neu · der Kap-Test für die
+Chronik wurde von der Dopplungsprüfung abgefangen, bevor die Länge je zählte. Beim
+Nachschärfen zeigte sich: Mit ID-Prüfung und Dopplungsverbot ist die Liste bereits auf 18
+Einträge begrenzt, die Längengrenze ist Gürtel zum Hosenträger. Der Test sagt das jetzt so,
+statt etwas anderes zu behaupten. Dazu waren zwei Zusicherungen im Teilen-Test leer
+(`not.toContain('http')` bei einem Text, der per Konstruktion keine URL enthält).
+
+**Alle neuen Korrekturen sind mutationsgeprüft**: Nimmt man je eine heraus, schlägt genau
+der zugehörige Test fehl.

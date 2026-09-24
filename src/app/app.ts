@@ -1,4 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 
 import {
   APP,
@@ -8,7 +19,7 @@ import {
   STARTUP_NOTICES,
   STARTUP_NOTICE_DISMISS,
 } from './content/de';
-import { PROTOCOL_LABELS } from './content/de';
+import { CHRONICLE_LABELS, LEGACY_LABELS, PROTOCOL_LABELS } from './content/de';
 import { OFFLINE } from './engine/balance';
 import { AutoSave } from './game/autosave';
 import type { AwayReport } from './game/away-report';
@@ -20,6 +31,8 @@ import { CrossSection } from './ui/cross-section/cross-section';
 import { DetailPanel } from './ui/detail-panel/detail-panel';
 import { ResourceBar } from './ui/resource-bar/resource-bar';
 import { ReturnSummary } from './ui/return-summary/return-summary';
+import { Chronicle } from './ui/chronicle/chronicle';
+import { Legacy } from './ui/legacy/legacy';
 import { Protocols } from './ui/protocols/protocols';
 import { Settings } from './ui/settings/settings';
 import { Card } from './ui/kit/card';
@@ -32,10 +45,12 @@ import { IconBox } from './ui/kit/icon-box';
   imports: [
     ArchiveLog,
     Card,
+    Chronicle,
     CrossSection,
     DetailPanel,
     Icon,
     IconBox,
+    Legacy,
     Protocols,
     ResourceBar,
     ReturnSummary,
@@ -48,6 +63,8 @@ export class App implements OnInit {
   private readonly store = inject(GameStore);
   private readonly loop = inject(GameLoop);
   private readonly autoSave = inject(AutoSave);
+  private readonly injector = inject(Injector);
+  private readonly title = viewChild<ElementRef<HTMLElement>>('pageTitle');
 
   protected readonly content = APP;
   protected readonly titles = PANEL_TITLES;
@@ -55,6 +72,8 @@ export class App implements OnInit {
   protected readonly settingsLabels = SETTINGS_LABELS;
   protected readonly noticeDismiss = STARTUP_NOTICE_DISMISS;
   protected readonly protocolLabels = PROTOCOL_LABELS;
+  protected readonly chronicleLabels = CHRONICLE_LABELS;
+  protected readonly legacyLabels = LEGACY_LABELS;
 
   /** Set when the player was away long enough to deserve an account of it. */
   protected readonly awayReport = signal<AwayReport | null>(null);
@@ -77,7 +96,8 @@ export class App implements OnInit {
   });
 
   ngOnInit(): void {
-    const report = this.store.initialize(Date.now());
+    const linked = new URLSearchParams(location.search).get('archiv');
+    const report = this.store.initialize(Date.now(), linked);
     // The gate is on what actually happened, not on wall-clock absence: reloading an
     // archive that fell silent days ago must not claim two days in which "nothing was
     // lost". An ending during the absence is always worth showing.
@@ -97,5 +117,10 @@ export class App implements OnInit {
 
   protected dismissNotice(): void {
     this.store.dismissStartupNotice();
+  }
+
+  /** The chronicle unmounts with the run it describes, so focus comes home to the page. */
+  protected onRestarted(): void {
+    afterNextRender(() => this.title()?.nativeElement.focus(), { injector: this.injector });
   }
 }

@@ -26,7 +26,16 @@ import { GameStore } from '../../game/game-store';
 import { formatInteger, formatSeconds } from '../../format';
 
 type ConditionKind = ProtocolCondition['kind'];
-type ActionChoice = 'repair' | 'toggle-on' | 'toggle-off';
+type ActionChoice = 'repair' | 'toggle-on' | 'toggle-off' | 'transmit-start' | 'transmit-stop';
+
+/** Which target an action needs: a system, a collection, or nothing at all. */
+const ACTION_TARGET: Record<ActionChoice, 'system' | 'collection' | 'none'> = {
+  repair: 'system',
+  'toggle-on': 'system',
+  'toggle-off': 'system',
+  'transmit-start': 'collection',
+  'transmit-stop': 'none',
+};
 
 /** Which extra dropdown a condition needs, if any. */
 const CONDITION_TARGET: Record<ConditionKind, 'system' | 'collection' | 'floor' | 'none'> = {
@@ -73,7 +82,13 @@ export class Protocols {
   protected readonly actionLabels = PROTOCOL_ACTION_LABELS;
 
   protected readonly conditionKinds = Object.keys(CONDITION_LABELS) as ConditionKind[];
-  protected readonly actionChoices: ActionChoice[] = ['repair', 'toggle-on', 'toggle-off'];
+  protected readonly actionChoices: ActionChoice[] = [
+    'repair',
+    'toggle-on',
+    'toggle-off',
+    'transmit-start',
+    'transmit-stop',
+  ];
   protected readonly systems = SYSTEM_IDS.map((id) => ({ id, name: SYSTEM_NAMES[id] }));
   protected readonly collections = COLLECTION_IDS.map((id) => ({
     id,
@@ -130,7 +145,10 @@ export class Protocols {
         'collectionId' in rule.condition ? rule.condition.collectionId : COLLECTION_IDS[0],
       floorTarget: 'floor' in rule.condition ? rule.condition.floor : 0,
       actionChoice: this.actionChoiceOf(rule),
-      actionSystem: rule.action.systemId,
+      actionTargetKind: ACTION_TARGET[this.actionChoiceOf(rule)],
+      actionSystem: 'systemId' in rule.action ? rule.action.systemId : SYSTEM_IDS[0],
+      actionCollection:
+        'collectionId' in rule.action ? rule.action.collectionId : COLLECTION_IDS[0],
       firedLabel: PROTOCOL_LABELS.fired(formatInteger(rule.firedCount)),
       };
     }),
@@ -232,14 +250,24 @@ export class Protocols {
   }
 
   protected setAction(rule: ProtocolRule, choice: ActionChoice): void {
-    this.store.updateProtocol(rule.id, {
-      action: this.actionFor(choice, rule.action.systemId),
-    });
+    const systemId = 'systemId' in rule.action ? rule.action.systemId : SYSTEM_IDS[0];
+    const collectionId =
+      'collectionId' in rule.action ? rule.action.collectionId : COLLECTION_IDS[0];
+    this.store.updateProtocol(rule.id, { action: this.actionFor(choice, systemId, collectionId) });
   }
 
   protected setActionSystem(rule: ProtocolRule, systemId: SystemId): void {
+    const collectionId =
+      'collectionId' in rule.action ? rule.action.collectionId : COLLECTION_IDS[0];
     this.store.updateProtocol(rule.id, {
-      action: this.actionFor(this.actionChoiceOf(rule), systemId),
+      action: this.actionFor(this.actionChoiceOf(rule), systemId, collectionId),
+    });
+  }
+
+  protected setActionCollection(rule: ProtocolRule, collectionId: CollectionId): void {
+    const systemId = 'systemId' in rule.action ? rule.action.systemId : SYSTEM_IDS[0];
+    this.store.updateProtocol(rule.id, {
+      action: this.actionFor(this.actionChoiceOf(rule), systemId, collectionId),
     });
   }
 
@@ -250,17 +278,33 @@ export class Protocols {
   }
 
   private actionChoiceOf(rule: ProtocolRule): ActionChoice {
-    if (rule.action.type === 'repair') {
-      return 'repair';
+    switch (rule.action.type) {
+      case 'repair':
+        return 'repair';
+      case 'transmit-start':
+        return 'transmit-start';
+      case 'transmit-stop':
+        return 'transmit-stop';
+      case 'toggle':
+        return rule.action.on ? 'toggle-on' : 'toggle-off';
     }
-    return rule.action.on ? 'toggle-on' : 'toggle-off';
   }
 
-  private actionFor(choice: ActionChoice, systemId: SystemId): ProtocolRule['action'] {
-    if (choice === 'repair') {
-      return { type: 'repair', systemId };
+  private actionFor(
+    choice: ActionChoice,
+    systemId: SystemId,
+    collectionId: CollectionId,
+  ): ProtocolRule['action'] {
+    switch (choice) {
+      case 'repair':
+        return { type: 'repair', systemId };
+      case 'transmit-start':
+        return { type: 'transmit-start', collectionId };
+      case 'transmit-stop':
+        return { type: 'transmit-stop' };
+      default:
+        return { type: 'toggle', systemId, on: choice === 'toggle-on' };
     }
-    return { type: 'toggle', systemId, on: choice === 'toggle-on' };
   }
 
   private thresholdFor(condition: ProtocolCondition): number {

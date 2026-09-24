@@ -11,10 +11,15 @@ import { COLLECTIONS, ENERGY, FLOOR_COUNT, PROTOCOLS } from '../engine/balance';
 import type { ProtocolAction, ProtocolCondition, ProtocolRule } from '../engine/protocol-types';
 import {
   COLLECTION_IDS,
+  EVENT_KINDS,
   SCHEMA_VERSION,
   SYSTEM_IDS,
+  type ActiveEffects,
+  type ChronicleEntry,
   type CollectionId,
+  type EventKind,
   type GameState,
+  type PendingEvent,
   type SystemId,
 } from '../engine/state';
 
@@ -171,6 +176,22 @@ export function parseSaveFile(json: string): ReadResult {
  * raw object of version n+1 — never a typed GameState, because the validator runs last.
  */
 const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
+  // v3 added weather effects, announcements and the loss timeline. A run from v2 has
+  // simply had no events yet; an empty set is exactly right.
+  2: (raw) => {
+    const state = isObject(raw['state']) ? { ...raw['state'] } : {};
+    return {
+      ...raw,
+      schemaVersion: 3,
+      state: {
+        ...state,
+        schemaVersion: 3,
+        effects: { inflowFactor: 1, inflowTicks: 0, mouldId: null, mouldTicks: 0 },
+        pending: [],
+        chronicle: [],
+      },
+    };
+  },
   // v2 added the material reserve; rules were always empty before, so nothing else moves.
   1: (raw) => {
     const state = isObject(raw['state']) ? { ...raw['state'] } : {};
@@ -287,6 +308,13 @@ export function validateState(input: unknown): GameState | null {
     return null;
   }
 
+  // The engine stops a transmission the moment the mast is lost or switched off, so a
+  // save that claims otherwise is one the game can never produce — and it would show
+  // "Wird gerade gesendet" while nothing left the building.
+  if (transmitting !== null && (systems.transmitter.lost || !systems.transmitter.on)) {
+    return null;
+  }
+
   const ended = input['ended'];
   const endReason = input['endReason'];
   if (typeof ended !== 'boolean') {
@@ -302,6 +330,13 @@ export function validateState(input: unknown): GameState | null {
 
   const protocols = validateProtocols(input['protocols'], protocolSlots);
   if (!protocols) {
+    return null;
+  }
+
+  const effects = validateEffects(input['effects']);
+  const pending = validatePending(input['pending']);
+  const chronicle = validateChronicle(input['chronicle']);
+  if (!effects || !pending || !chronicle) {
     return null;
   }
 
@@ -322,10 +357,112 @@ export function validateState(input: unknown): GameState | null {
     protocols,
     protocolSlots,
     materialReserve: input['materialReserve'] as number,
+    effects,
+    pending,
+    chronicle,
     custodianCooldown,
     ended,
     endReason: endReason as GameState['endReason'],
   };
+}
+
+function validateEffects(input: unknown): ActiveEffects | null {
+  if (!isObject(input)) {
+    return null;
+  }
+  const inflowFactor = input['inflowFactor'];
+  const inflowTicks = input['inflowTicks'];
+  const mouldTicks = input['mouldTicks'];
+  const mouldId = input['mouldId'];
+
+  if (
+    !isInRange(inflowFactor, 0, 10) ||
+    !isInRange(inflowTicks, 0, 3600) ||
+    !isInRange(mouldTicks, 0, 3600) ||
+    (mouldId !== null && !isCollectionId(mouldId))
+  ) {
+    return null;
+  }
+
+  // Cross-field invariants the engine always holds. Without them an edited save could
+  // carry an effect that never expires — rain stopped for good, or mould forever —
+  // which would quietly switch off the decay the whole game rests on.
+  if (inflowTicks === 0 && inflowFactor !== 1) {
+    return null;
+  }
+  if ((mouldTicks === 0) !== (mouldId === null)) {
+    return null;
+  }
+
+  return { inflowFactor, inflowTicks, mouldId: mouldId as CollectionId | null, mouldTicks };
+}
+
+function validatePending(input: unknown): PendingEvent[] | null {
+  if (!Array.isArray(input) || input.length > EVENT_KINDS.length * 4) {
+    return null;
+  }
+  const pending: PendingEvent[] = [];
+  for (const raw of input) {
+    if (!isObject(raw) || !isEventKind(raw['kind']) || !isInRange(raw['ticks'], 0, 600)) {
+      return null;
+    }
+    pending.push({ kind: raw['kind'], ticks: raw['ticks'] });
+  }
+  return pending;
+}
+
+function validateChronicle(input: unknown): ChronicleEntry[] | null {
+  // Every system, every collection and every floor appears at most once — the engine
+  // records a floor's flooding only the first time. The cap and that rule must agree,
+  // or a legitimate run would produce a save this validator refuses.
+  const limit = SYSTEM_IDS.length + COLLECTION_IDS.length + FLOOR_COUNT;
+  if (!Array.isArray(input) || input.length > limit) {
+    return null;
+  }
+  const entries: ChronicleEntry[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (!isObject(raw) || !isInRange(raw['tick'], 0, Number.MAX_SAFE_INTEGER)) {
+      return null;
+    }
+    const kind = raw['kind'];
+    const id = raw['id'];
+    if (
+      typeof id !== 'string' ||
+      (kind !== 'system-lost' && kind !== 'collection-lost' && kind !== 'floor-flooded')
+    ) {
+      return null;
+    }
+    // The id has to name something in this archive; the chronicle and the share text
+    // render it straight through, so "banana ausgefallen" must be impossible.
+    if (!namesSomething(kind, id)) {
+      return null;
+    }
+    const key = `${kind}:${id}`;
+    if (seen.has(key)) {
+      return null;
+    }
+    seen.add(key);
+    entries.push({ tick: raw['tick'], kind, id });
+  }
+  return entries;
+}
+
+function namesSomething(kind: ChronicleEntry['kind'], id: string): boolean {
+  switch (kind) {
+    case 'system-lost':
+      return isSystemId(id);
+    case 'collection-lost':
+      return isCollectionId(id);
+    case 'floor-flooded': {
+      const floor = Number(id);
+      return Number.isInteger(floor) && floor >= 0 && floor < FLOOR_COUNT && String(floor) === id;
+    }
+  }
+}
+
+function isEventKind(value: unknown): value is EventKind {
+  return typeof value === 'string' && (EVENT_KINDS as readonly string[]).includes(value);
 }
 
 /** Rules are player-authored data, so every field is checked before it is trusted. */
@@ -402,7 +539,16 @@ function validateCondition(input: unknown): ProtocolCondition | null {
 }
 
 function validateProtocolAction(input: unknown): ProtocolAction | null {
-  if (!isObject(input) || !isSystemId(input['systemId'])) {
+  if (!isObject(input)) {
+    return null;
+  }
+  if (input['type'] === 'transmit-stop') {
+    return { type: 'transmit-stop' };
+  }
+  if (input['type'] === 'transmit-start' && isCollectionId(input['collectionId'])) {
+    return { type: 'transmit-start', collectionId: input['collectionId'] };
+  }
+  if (!isSystemId(input['systemId'])) {
     return null;
   }
   if (input['type'] === 'repair') {
@@ -480,6 +626,12 @@ function validateCollections(input: unknown): GameState['collections'] | null {
     }
     // Units cannot be invented or lost in bookkeeping.
     if (Math.abs(intact + sent + rotted - COLLECTIONS.unitsEach) > 0.01) {
+      return null;
+    }
+    // A lost collection holds nothing. Otherwise its units would sit there untouched —
+    // the rot skips them — while still counting towards "there is something to save",
+    // so the run could never reach its end.
+    if (lost && intact > 0) {
       return null;
     }
     collections[id as CollectionId] = {
