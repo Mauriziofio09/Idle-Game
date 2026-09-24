@@ -174,7 +174,12 @@ describe('running the protocols', () => {
   });
 
   it('counts every firing on the rule itself', () => {
-    let state = readyState([rule()]);
+    // The pumps start low on purpose: a stronger repair once lifted them to 100 on the
+    // first firing, the rule's own condition stopped holding, and the count stayed at 1.
+    const base = createInitialState('4F2A');
+    let state = readyState([rule()], {
+      systems: { ...base.systems, pumps: { ...base.systems.pumps, integrity: 10 } },
+    });
     state = runProtocols(state).state;
     expect(state.protocols[0].firedCount).toBe(1);
 

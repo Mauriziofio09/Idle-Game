@@ -69,7 +69,12 @@ describe('a save that cannot be trusted', () => {
     const original = encodeExport(fileFor());
     const decoded = JSON.parse(atob(original)) as { payload: string; checksum: string };
 
-    const tampered = decoded.payload.replace('"material":50', '"material":9999');
+    // Read the amount out of the payload rather than naming it: when the starting
+    // material changed, the literal stopped matching and the test tampered with
+    // nothing at all.
+    const material = /"material":(-?[0-9.]+)/.exec(decoded.payload);
+    expect(material).not.toBeNull();
+    const tampered = decoded.payload.replace(material![0], '"material":9999');
     expect(tampered).not.toBe(decoded.payload);
 
     // Payload changed, checksum left alone: exactly what hand-editing looks like.

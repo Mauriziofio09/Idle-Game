@@ -36,19 +36,51 @@ export const ENTROPY = {
 export const ENERGY = {
   capacity: 150,
   start: 80,
-  /** Generator output at full integrity, in energy per second. */
-  generatorOutputPerSecond: 3.0,
+  /**
+   * Generator output at full integrity, in energy per second, for the standard archive.
+   * SCENARIOS reads it from here; the drought sets its own. Nothing else may, or there
+   * would be two answers to what the generator produces and only one of them would run.
+   *
+   * Milestone 8 raised this from 3.0. At 3.0 a house with everything switched on was
+   * already short of power at tick one, the battery never refilled, and a repair —
+   * which costs energy — was unaffordable for the rest of the run. Nothing the player
+   * did could change the outcome, which left pillar 2 with no decisions to make.
+   */
+  generatorOutputPerSecond: 4.2,
+  /**
+   * What the house draws whatever is switched on: sensors, emergency lighting, me.
+   *
+   * Added in milestone 8. Without it an archive whose systems are all lost or off has a
+   * demand of zero, so the battery never empties and "Energie = 0" never becomes true —
+   * a dead house would sit at a steady charge until the last collection happened to rot.
+   * Measured before the change: 21.9 minutes in which nothing ran and nothing could be
+   * decided. It also makes switching everything off a delay rather than an escape,
+   * which is what pillar 1 asks for.
+   */
+  baseDrawPerSecond: 0.3,
 } as const;
 
 export const MATERIAL = {
-  start: 50,
+  /**
+   * Starting material for the standard archive; SCENARIOS reads it from here.
+   *
+   * Raised from 50 in milestone 8, together with much cheaper repairs below.
+   * Measured before: a whole run supported twelve repairs and was blocked on material
+   * 1134 times against zero times on energy. Material was not scarce, it was absent.
+   */
+  start: 90,
 } as const;
 
 export const WATER = {
   /** Floors per second of inflow before entropy and events are applied. */
   rainBasePerSecond: 0.004,
-  /** Floors per second the pumps remove at full integrity. */
-  pumpMaxPerSecond: 0.005,
+  /**
+   * Floors per second the pumps remove at full integrity. Raised from 0.005 in
+   * milestone 8: below the rain's 0.004 they could only ever delay the water, never
+   * hold it, so keeping them alive bought nothing and the cellar decision was no
+   * decision. At 0.011 a well-kept pump holds the line and a neglected one does not.
+   */
+  pumpMaxPerSecond: 0.011,
   min: 0,
   /** The ceiling for the standard house; a scenario's own floor count overrides it. */
   max: FLOOR_COUNT,
@@ -91,16 +123,34 @@ export const START_INTEGRITY = {
 } as const;
 
 export const REPAIR = {
-  /** Integrity restored at full workshop support before diminishing returns. */
-  baseGain: 30,
+  /**
+   * Integrity restored at full workshop support before diminishing returns. Raised
+   * from prompt.md's 30 in milestone 8: it is the one number that lengthens a naive
+   * run without touching an untended one, because it only pays out to someone who
+   * repairs. At 30 the naive player outlived the idle archive by three minutes; the
+   * target asks for five to twenty.
+   */
+  baseGain: 42,
   /** Workshop factor w = workshopFloor + workshopRange * workshopIntegrity / 100. */
   workshopFloor: 0.4,
   workshopRange: 0.6,
-  /** Each repair of the same system is worth diminishing^n of the last. */
-  diminishing: 0.8,
-  /** Material cost = materialBase * (1 + materialGrowth * n). */
-  materialBase: 8,
-  materialGrowth: 0.25,
+  /**
+   * Each repair of the same system is worth diminishing^n of the last. Raised from
+   * prompt.md's 0.8 in milestone 8, and this is the largest deviation in the file.
+   *
+   * At 0.8 the fifth repair of a system was worth a third of the first, which capped
+   * what any system could ever be given at 30 / (1 - 0.8) = 150 integrity. The pumps
+   * lose that in twenty minutes, so no strategy could hold the cellar and good play
+   * ended no later than naive play. The measured effect of raising it: good play went
+   * from 31 to 36 minutes while an untended archive did not move by a single second,
+   * because nobody repairs it. 0.99 is the mildest value that reaches the target band;
+   * 0.97 was still short. What ends a run now is material and entropy, not a ceiling
+   * on how often a thing may be mended.
+   */
+  diminishing: 0.99,
+  /** Material cost = materialBase * (1 + materialGrowth * n). Both cut in milestone 8. */
+  materialBase: 3,
+  materialGrowth: 0.08,
   energyCost: 10,
   maxIntegrity: 100,
 } as const;
@@ -112,9 +162,23 @@ export const DISMANTLE = {
 } as const;
 
 export const TRANSMIT = {
-  /** Units per second at full transmitter integrity. */
-  unitsPerSecond: 0.2,
-  energyPerSecond: 1.5,
+  /**
+   * Units per second at full transmitter integrity. Lowered from 0.2 in milestone 8 to
+   * hold the naive player's saved share under a fifth once the longer runs arrived;
+   * runtime barely notices it, saved share scales with it almost exactly.
+   */
+  unitsPerSecond: 0.15,
+  /**
+   * Lowered from 1.5 in milestone 8. At 1.5 the mast alone needed half the generator's
+   * whole output, so sending shortened a run instead of being what a run is for.
+   */
+  energyPerSecond: 0.8,
+  /**
+   * The mast wears faster while it sends; that is the price of the only thing that
+   * saves anything. Raised from 0.07 in milestone 8, because it is what separates a
+   * player who tends the mast from one who does not — and with it, what they save.
+   */
+  decayWhileSending: 0.105,
 } as const;
 
 export const COLLECTIONS = {
@@ -213,18 +277,28 @@ export const TARGETS = {
 } as const;
 
 /** Per-system configuration. Floors: 0 cellar, 1 ground, 2 first, 3 second, 4 attic. */
+/**
+ * Per-system configuration. Floors: 0 cellar, 1 ground, 2 first, 3 second, 4 attic.
+ *
+ * Milestone 8 rebalanced the decay rates around a single idea: the house should fall
+ * apart slowly enough that tending it is worth the effort, while the two machines the
+ * player's attention actually lands on — the pumps and the mast — fall apart fast
+ * enough that neglecting them shows. The others run at roughly a third of their old
+ * rate; the pumps and the mast at half again as fast as they used to.
+ */
 export const SYSTEMS = {
-  generator: { floor: 1, baseDecayPerSecond: 0.06, drawPerSecond: 0 },
-  pumps: { floor: 0, baseDecayPerSecond: 0.09, drawPerSecond: 1.2 },
-  workshop: { floor: 1, baseDecayPerSecond: 0.03, drawPerSecond: 0 },
-  climate: { floor: 2, baseDecayPerSecond: 0.05, drawPerSecond: 0.8 },
-  custodian: { floor: 2, baseDecayPerSecond: 0.05, drawPerSecond: 0.4 },
-  roof: { floor: 4, baseDecayPerSecond: 0.04, drawPerSecond: 0 },
-  /** The transmitter wears faster while it is sending; see TRANSMITTER_DECAY_SENDING. */
-  transmitter: { floor: 4, baseDecayPerSecond: 0.03, drawPerSecond: 0 },
+  generator: { floor: 1, baseDecayPerSecond: 0.018, drawPerSecond: 0 },
+  /** 0.150 rather than 0.135: the one rate that pulled the untended archive back under
+   * its fifteen minute ceiling without pushing the naive run out of its own band. */
+  pumps: { floor: 0, baseDecayPerSecond: 0.150, drawPerSecond: 0.8 },
+  workshop: { floor: 1, baseDecayPerSecond: 0.009, drawPerSecond: 0 },
+  climate: { floor: 2, baseDecayPerSecond: 0.015, drawPerSecond: 0.8 },
+  custodian: { floor: 2, baseDecayPerSecond: 0.015, drawPerSecond: 0.4 },
+  roof: { floor: 4, baseDecayPerSecond: 0.012, drawPerSecond: 0 },
+  /** The transmitter wears faster while it is sending; see TRANSMIT.decayWhileSending. */
+  transmitter: { floor: 4, baseDecayPerSecond: 0.045, drawPerSecond: 0 },
 } as const;
 
-export const TRANSMITTER_DECAY_SENDING = 0.07;
 
 /** Where each collection starts. Two of them sit below the waterline's first targets. */
 export const COLLECTION_FLOORS = {
@@ -258,8 +332,8 @@ export const SCENARIOS = {
   standard: {
     floors: 5,
     rainBasePerSecond: 0.004,
-    generatorOutputPerSecond: 3.0,
-    materialStart: 50,
+    generatorOutputPerSecond: ENERGY.generatorOutputPerSecond,
+    materialStart: MATERIAL.start,
     systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 2, custodian: 2, roof: 4, transmitter: 4 },
     collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 2, letters: 3, languages: 4 },
   },
@@ -267,8 +341,8 @@ export const SCENARIOS = {
   drought: {
     floors: 5,
     rainBasePerSecond: 0.0018,
-    generatorOutputPerSecond: 2.2,
-    materialStart: 50,
+    generatorOutputPerSecond: 3.1,
+    materialStart: MATERIAL.start,
     systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 2, custodian: 2, roof: 4, transmitter: 4 },
     collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 2, letters: 3, languages: 4 },
   },
@@ -276,8 +350,8 @@ export const SCENARIOS = {
   tower: {
     floors: 7,
     rainBasePerSecond: 0.004,
-    generatorOutputPerSecond: 3.0,
-    materialStart: 30,
+    generatorOutputPerSecond: ENERGY.generatorOutputPerSecond,
+    materialStart: 55,
     systemFloors: { generator: 1, pumps: 0, workshop: 1, climate: 3, custodian: 3, roof: 6, transmitter: 6 },
     collectionFloors: { maps: 0, chronicle: 1, naturalHistory: 2, music: 3, letters: 4, languages: 6 },
   },

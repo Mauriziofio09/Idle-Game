@@ -1,5 +1,5 @@
 import { applyAction, canApply } from './actions';
-import { COLLECTIONS, ENERGY, TRANSMIT, TRANSMITTER_DECAY_SENDING, SYSTEMS } from './balance';
+import { COLLECTIONS, ENERGY, TRANSMIT, SYSTEMS } from './balance';
 import { simulate } from './offline';
 import { createInitialState, savedShare, type GameState } from './state';
 import { demand, isTransmitting, step, transmitRate } from './step';
@@ -105,7 +105,7 @@ describe('sending', () => {
       sending.systems.transmitter.integrity - step(sending).state.systems.transmitter.integrity;
 
     expect(sendingLoss).toBeGreaterThan(idleLoss);
-    expect(TRANSMITTER_DECAY_SENDING).toBeGreaterThan(SYSTEMS.transmitter.baseDecayPerSecond);
+    expect(TRANSMIT.decayWhileSending).toBeGreaterThan(SYSTEMS.transmitter.baseDecayPerSecond);
   });
 
   it('reports completion and releases the mast', () => {

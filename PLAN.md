@@ -312,11 +312,14 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [ ] Mobile 375 px
 - [ ] Sound (KANN, Web Audio, standardmäßig aus)
 
-### M8 · Balancing & Release
-- [ ] `npm run sim` über 200 Seeds, Median/P10/P90
-- [ ] `balance.spec.ts` gegen die Ziele aus Abschnitt 6 (mit Toleranz)
-- [ ] Garantie-Test: jede Strategie endet < 72 h
-- [ ] Performance + Bundle-Budget
+### M8a · Balancing
+- [x] `npm run sim` über 200 Seeds, Median/P10/P90
+- [x] `balance.spec.ts` gegen die Ziele aus Abschnitt 6 (mit Toleranz)
+- [x] Garantie-Test: jede Strategie endet < 72 h
+- [x] Offline-Budget: 24 h in rund 65 ms (Ziel < 1500 ms)
+
+### M8b · Release
+- [ ] Bundle-Budget
 - [ ] Playwright-Smoke: lädt · Reparatur · Reload behält Spielstand
 - [ ] `README.md` als Portfolio-Stück, MIT-Lizenz
 - [ ] GitHub-Actions-Workflow für Pages (korrekter `base-href`)
@@ -846,3 +849,194 @@ unter einem anderen Szenario; er ist ergänzt.
 30. **Ein Seed-Link öffnet auch ein noch nicht freigeschaltetes Haus.** `prompt.md` 5.11
     verlangt „exakt dasselbe Archiv"; die Freischaltungen aus 5.12 regeln, was man *wählen*
     kann, nicht was man gezeigt bekommen darf. Ein Link ist eine Einladung.
+
+
+---
+
+## 16 · Stand nach M8a (Balancing)
+
+Gemessen mit `npm run sim` über 200 Seeds, Werte in `src/app/engine/balance.ts`,
+festgehalten in `src/app/engine/balance.spec.ts`.
+
+| Strategie | Laufzeit (P10 / Median / P90) | Gerettet (Median) | Ziel aus Abschnitt 6 |
+|---|---|---|---|
+| Nichts tun | 13,6 / **14,9** / 16,4 min | 0,0 % | 8–15 min, ≈ 0 % — **erreicht** |
+| Naiv | 12,8 / **19,7** / 26,7 min | 14,0 % | 20–35 min, 10–20 % — Anteil erreicht, Laufzeit 18 s unter der Kante |
+| Gutes aktives Spiel | 37,3 / **40,3** / 43,5 min | 27,5 % | 35–60 min, 20–40 % — **erreicht** |
+| Beste Protokolle, 8 h fort | 27,2 / **32,6** / 37,0 min | 15,4 % | „kann die Nacht überstehen" — **nicht erreicht**, siehe unten |
+
+Jede der sieben Strategien endet; das Offline-Budget liegt bei rund 65 ms für 24 h (gemessen 64–68).
+
+### Was das Tuning tatsächlich bewegt hat
+
+Der Ausgangszustand nach M5 war, dass gutes Spiel *schlechter* abschnitt als Nichtstun.
+Diagnose per Messung, nicht per Vermutung:
+
+1. **Material war die Wand, nicht Energie.** Ein Lauf trug zwölf Reparaturen; er scheiterte
+   1134-mal an Material und **null**-mal an Energie. Darum `materialBase` 8 → 3,
+   `materialGrowth` 0,25 → 0,08, Startmaterial 50 → 90.
+2. **Ein totes Archiv verstummte nie.** War alles verloren oder abgeschaltet, war der Bedarf
+   0, der Akku lief nie leer und `energy <= 0` wurde nie wahr — gemessen 21,9 Minuten
+   Nichts. Darum `ENERGY.baseDrawPerSecond = 0,3`: das Haus zieht einen Faden Strom, was
+   auch immer an ist.
+3. **Der Abnutzungsfaktor war der eigentliche Deckel.** Bei `0,8^n` kann ein System über
+   seine ganze Lebenszeit höchstens `30 / (1 − 0,8) = 150` Integrität *überhaupt*
+   zurückbekommen. Die Pumpen verlieren das in zwanzig Minuten — keine Strategie konnte den
+   Keller halten, und gutes Spiel endete nicht später als naives. Entscheidend: dieser Wert
+   rührt „Nichts tun" **überhaupt nicht** an, weil dort niemand repariert. Gemessen:
+   0,94 → 0,99 hob gutes Spiel von 31 auf 36 Minuten, während der ungepflegte Lauf sich um
+   keine Sekunde bewegte. 0,99 ist der mildeste Wert, der das Zielband erreicht; 0,97 war
+   noch zu kurz.
+4. **`baseGain` 30 → 42** ist der zweite Hebel derselben Art: er zahlt nur an jemanden aus,
+   der repariert. Bei 30 überlebte der naive Spieler das ungepflegte Archiv um drei Minuten,
+   das Ziel verlangt fünf bis zwanzig.
+5. **`TRANSMIT.unitsPerSecond` 0,2 → 0,15** hielt den Naiv-Anteil unter einem Fünftel, als
+   die längeren Läufe kamen. Der Anteil skaliert fast exakt mit diesem Wert, die Laufzeit
+   kaum.
+6. **Pumpenverfall 0,135 → 0,150** war die letzte Feinjustierung: der einzige Wert, der
+   „Nichts tun" unter seine 15-Minuten-Decke zog, ohne den naiven Lauf aus seinem Band zu
+   schieben.
+
+Zwei Sackgassen, damit sie niemand zweimal geht: **passive Entropie** (0,02 → 0,002)
+bewegte die Protokoll-Nacht um 2,4 Minuten — die Läufe sind schlicht zu kurz, als dass der
+Entropie-Anstieg sie bestimmte. Und ein **Sweep, der nichts tat**, weil das `sed`-Muster
+nicht passte und drei identische Läufe lieferte; dieselbe Falle wie bei
+`TRANSMITTER_DECAY_SENDING` in M5. Ein Sweep, dessen Ergebnisse sich nicht unterscheiden,
+ist ein kaputter Sweep, kein Befund.
+
+### Das vierte Ziel ist nicht erreichbar — aber nicht aus dem Grund, den ich zuerst nannte
+
+`prompt.md` Abschnitt 6 verlangt, dass beste Protokolle acht Stunden — 480 Minuten —
+überstehen *können*. Erreicht werden 32,6.
+
+**Die erste Erklärung in diesem Abschnitt war falsch.** Sie lautete, Material sei die
+Grenze: rund 3 300 nötig gegen rund 950 verfügbar. Die Rechnung war in sich stimmig und
+wurde nie gegengemessen. Die Gegenmessung (8 Seeds, Strategie „jedes System über 70 %
+halten"):
+
+| Material | Laufzeit (Median) |
+|---|---|
+| regulär (90 + Treibgut) | 39,1 min |
+| dauerhaft 3 000 | 64,0 min |
+| dauerhaft unbegrenzt | 64,0 min |
+
+33-faches Material kauft **25 Minuten**, dann sättigt es. Material ist die Grenze bis
+etwa 64 Minuten und danach nicht mehr.
+
+**Die eigentliche Decke ist die Entropie, und sie ist strukturell.** Der Zufluss wächst mit
+ihr: `Regen = 0,004 × (1 + S/200)`. Die Pumpen schaffen höchstens `0,011` Etagen/Sekunde.
+Gleichstand liegt bei
+
+    0,004 × (1 + 350/200) = 0,011 → S = 350
+
+und die passive Entropie allein erreicht S = 350 nach `350 / 0,02 / 60 = 292 Minuten`.
+Ab diesem Punkt regnet es schneller herein, als die Pumpen fördern **können** — bei jeder
+Integrität, bei jedem Materialvorrat, unter jeder Strategie. Das Haus ersäuft, und mit dem
+Generator auf Etage 1 folgt die Stille. 480 Minuten liegen jenseits dieser Grenze.
+
+Die Decke ließe sich nur verschieben, indem man das Entropie-Gesetz selbst ändert — und
+genau das ist laut `prompt.md` Abschnitt 2 der Haken, an dem das ganze Spiel hängt:
+Entropie fällt nie. Zum Vergleich: mit `passivePerSecond` 0,002 **und** `perRepair` 0,5,
+also einem Spiel ohne diesen Haken, erreicht dieselbe Strategie 227,6 Minuten — immer noch
+nicht die Nacht.
+
+Entscheidung unverändert: die drei erreichbaren Ziele werden strikt gehalten, das vierte
+offen dokumentiert. Eine Mechanik, die eine echte Nacht möglich machen würde, liegt in
+`IDEAS.md`; sie gehört in eine Spezifikation, nicht in eine Zahlendatei.
+
+### Wie die falsche Erklärung zustande kam
+
+Sie ist es wert, festgehalten zu werden, weil der Fehler eine Form hat. Die passive
+Entropie wurde als Hebel geprüft und verworfen: 0,02 → 0,002 bewegte die Protokoll-Nacht um
+2,4 Minuten. Gemessen wurde das aber an Läufen von rund 33 Minuten — einem Maßstab, auf dem
+die Entropie folgerichtig nichts bewegen *kann*, weil sie in dieser Zeit kaum wächst. Die
+Nullmessung wurde dann auf den 480-Minuten-Maßstab verallgemeinert, wo sie alles bestimmt.
+
+Danach wurde Material als Grund eingesetzt und nur *vorwärts* gerechnet — wie viel nötig
+wäre — nie rückwärts geprüft, ob unbegrenztes Material denn hilft. Das Muster: wo gemessen
+wurde, stimmte es; wo argumentiert wurde, wurde nicht gemessen. Eine Begründung, die eine
+Zielverfehlung rechtfertigt, braucht dieselbe Gegenprobe wie ein grüner Test.
+
+### Toleranz in `balance.spec.ts`
+
+Es gibt keine. Alle Bänder werden exakt so geprüft, wie Abschnitt 6 sie nennt. Zwischenzeitlich
+stand hier eine Lockerung der unteren Naiv-Grenze von 20 auf 19 Minuten, begründet mit dem
+200-Seed-Median von 19,7 — die Datei misst aber 60 Seeds, und dort liegt der Median bei
+22,1. Die Toleranz war aus einem anderen Sweep mitgeschleppt und für die eigene Stichprobe
+gegenstandslos; sie ist entfernt, alle Tests bleiben grün. Die **Reihenfolge** — gutes Spiel
+schlägt naives, naives schlägt Weggehen, in Laufzeit *und* Anteil — wird zusätzlich geprüft.
+
+`balance.spec.ts` deckt die erreichbaren Ziele ab, nicht jede Zahl in `balance.ts`. Ohne
+Fehlschlag änderbar sind unter anderem `ENTROPY.decayDivisor`,
+`COLLECTIONS.floodedDecayPerSecond`, `COLLECTIONS.decayPerSecond`,
+`SYSTEM_DECAY.offMultiplier` und `SYSTEMS.workshop.baseDecayPerSecond`. Das steht hier statt
+einer Behauptung von Vollständigkeit im Dateikopf.
+
+### Neun Tests, die an Zahlen hingen
+
+Das Retuning ließ neun Tests fallen, und jeder einzelne hing an einer Zahl statt an einer
+Aussage. Repariert wurde nicht die Erwartung, sondern der Aufbau:
+
+- Fünf Strom-Tests verließen sich darauf, dass der *Startzustand* zufällig unterversorgt
+  ist. Der stärkere Generator machte das falsch — sie hätten von da an bestanden, ohne
+  irgendetwas über Rationierung zu beweisen. Jetzt beschädigt ein Helfer `undersupplied()`
+  den Generator und **wirft**, wenn die Produktion den Bedarf doch deckt.
+- Zwei Fäulnis-Tests setzten eine Überflutung und ließen die Pumpen laufen, die sie
+  wegpumpten. Jetzt werden die Pumpen gestoppt und der Wasserstand am Ende geprüft.
+- Ein Protokoll-Test zählte Zündungen einer Regel, die nach der ersten, nun stärkeren
+  Reparatur nicht mehr zutraf.
+- Ein Save-Test verfälschte die Zeichenkette `"material":50` — nach dem Startmaterial 90
+  verfälschte er gar nichts mehr. Jetzt liest er den Betrag aus der Nutzlast.
+
+Gegengeprüft: mit heilem Generator schlagen alle fünf Strom-Tests laut fehl, und ohne den
+`supplyRatio`-Faktor in `outflow` fallen genau die beiden Rationierungs-Tests.
+
+### Neu
+
+- `src/app/engine/strategies.ts` — die drei Spieler aus Abschnitt 6 als reine
+  Entscheidungsfunktionen, gemeinsam genutzt von `npm run sim` und `balance.spec.ts`, damit
+  Simulation und Test nicht auseinanderlaufen können.
+- `scripts/tune.ts` — `npm run tune`, ein Gitter-Sweep über Balance-Werte zur Diagnose.
+
+
+### Nachträge aus der M8a-Review
+
+Die Review aus frischem Kontext bestätigte Messwerte, Engine-Reinheit, Determinismus und
+dass die neun reparierten Tests stärker und nicht schwächer wurden (von 16 Perturbationen
+in `balance.ts` brachen 10 `balance.spec.ts`). Sie fand zehn Mängel; alle sind behoben:
+
+1. **Die Material-Rechnung zum 8-h-Ziel war eine Fehldiagnose.** Selbst nachgemessen und
+   bestätigt: unbegrenztes Material kauft 64 Minuten, nicht 480. Der Abschnitt oben ist
+   ersetzt, samt der Frage, wie der Fehler zustande kam. Die falsche Zahl stand auch in
+   `IDEAS.md` und ist dort korrigiert.
+2. **„Material großzügiger zu machen verlängert *sofort*"** war zu stark formuliert;
+   mit den gemessenen Zahlen ersetzt.
+3. **Zwei tote Zahlen mit den längsten Begründungen der Datei.** `ENERGY.generatorOutputPerSecond`
+   und `MATERIAL.start` wurden nirgends gelesen — die Engine nahm die Kopien in `SCENARIOS`.
+   `SCENARIOS` liest sie jetzt von dort; gegengeprüft: 4,2 → 3,0 lässt nun fünf Tests fallen,
+   vorher keinen.
+4. **`scripts/tune.ts` war im committeten Zustand kaputt.** Das Gitter skalierte bereits
+   getunte Werte in eine wirkungslose Region (drei identische Läufe — genau die Falle, die
+   dieser Abschnitt selbst brandmarkt), `diminishing` stand auf dem alten 0,94, der
+   Mastverfall als Literal `0.07`, und der Knopf `mastDraw` las ein Feld, das er gar nicht
+   schreibt. Alle Startwerte kommen jetzt aus `balance.ts`, die Skalen umschließen 1,0 =
+   „wie ausgeliefert". Der Sweep meldet wieder Treffer (18 von 54 mit ≥ 3 von 4 Zielen).
+5. **`tune.ts` duplizierte die Strategien**, die `strategies.ts` im selben Meilenstein
+   vereinheitlichen sollte — und war bereits abgedriftet. Es importiert sie jetzt.
+6. **Eine durch Konstruktion wahre Zusicherung.** „Rettet nichts, wenn niemand sendet" war
+   für jede Zahlenbelegung wahr, weil `doNothing` nie sendet. Ersetzt durch einen Kontrast:
+   derselbe Seed, ein einziger Knopf, und der Mast allein bringt 6,5 % heraus — wobei das
+   weniger ist als gutes Spiel. Gegengeprüft: die Sende-Rate zu senken lässt ihn fallen.
+7. **Die einzige Toleranz war überflüssig.** Entfernt, siehe oben.
+8. **Der Entropiepreis einer Reparatur war ungesichert.** `ENTROPY.perRepair` ließ sich auf
+   0 setzen, ohne dass ein Test anschlug — ausgerechnet die Zahl, an der `prompt.md`
+   Abschnitt 2 das Spiel aufhängt. Neuer Test: die Entropie am Ende eines gut gespielten
+   Laufs muss den passiven Anstieg um mehr als das Doppelte übersteigen. Gegengeprüft: bei
+   `perRepair: 0` fällt er.
+9. **Strategie-Schwellen ohne Namen.** Sie bleiben bewusst außerhalb von `balance.ts` —
+   dort stehen die Zahlen, aus denen das Haus besteht, hier die, nach denen ein Mensch
+   spielt, und beide Enden des Vergleichs gleichzeitig zu verstellen wäre der Fehler. Sie
+   sind jetzt als benannte Blöcke `NAIVE` und `WELL_PLAYED` gebündelt statt inline verstreut.
+10. **Ort von `strategies.ts`** wurde geprüft und als vertretbar bestätigt: Nicht-Produktcode
+    im Produktbaum, aber es landet nicht im Bundle, hält die Engine-Regeln ein, und
+    `scripts/` wäre für einen Import aus einer Spec-Datei die falsche Richtung.

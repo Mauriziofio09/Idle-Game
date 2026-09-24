@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOG } from '../content/de';
-import { LEGACY, OFFLINE, PROTOCOLS, SYSTEMS } from '../engine/balance';
+import { ENERGY, LEGACY, OFFLINE, PROTOCOLS, SYSTEMS } from '../engine/balance';
 import { demand, production } from '../engine/step';
 import { simulate } from '../engine/offline';
 import { createInitialState } from '../engine/state';
@@ -113,8 +113,12 @@ describe('GameStore', () => {
 
     store.dispatch({ type: 'toggle', systemId: 'pumps', on: false });
     store.dispatch({ type: 'toggle', systemId: 'custodian', on: false });
-    // With nothing switched on, the whole of production is surplus.
-    expect(store.energyRate()).toBeCloseTo(production(store.state()), 10);
+    // With nothing switched on the house still draws its trickle, so the surplus is
+    // production minus that — switching off is a delay, never an escape.
+    expect(store.energyRate()).toBeCloseTo(
+      production(store.state()) - ENERGY.baseDrawPerSecond,
+      10,
+    );
   });
 
   it('keeps the log bounded during a long catch-up', () => {

@@ -1,12 +1,13 @@
 /**
  * Headless balancing run — `npm run sim`.
  *
- * Plays whole runs without a UI, using the same engine the browser uses, and prints
- * the distribution of runtime and rescued share per strategy. Milestone 8 tunes the
- * numbers in src/app/engine/balance.ts against the targets in prompt.md section 6.
+ * Plays whole runs without a UI, using the same engine the browser uses, and prints the
+ * distribution of runtime and rescued share per strategy against the targets in
+ * prompt.md section 6. This is the instrument milestone 8 tunes balance.ts with.
  *
- * Version 1 covers the strategies that only need milestone 1 actions. "Rescued" stays
- * at 0 % until the transmitter arrives in milestone 5.
+ * The strategies are meant to stand in for real players, so they are written the way a
+ * player would think: the naive one repairs whatever looks worst, the good one keeps the
+ * generator alive, sheds load it cannot afford and sends without pause.
  */
 
 import { applyAction, canApply, type Action } from '../src/app/engine/actions';
@@ -14,6 +15,7 @@ import { TARGETS } from '../src/app/engine/balance';
 import { COLLECTION_IDS, SYSTEM_IDS, createInitialState, savedShare, type GameState } from '../src/app/engine/state';
 import { step } from '../src/app/engine/step';
 import { stateToSeed } from '../src/app/engine/rng';
+import { doNothing, patchTheWorst, playWell } from '../src/app/engine/strategies';
 import type { ProtocolRule } from '../src/app/engine/protocol-types';
 
 /** Pillar 1: every strategy has to end. The ceiling lives in balance.ts with the other targets. */
@@ -28,29 +30,19 @@ interface Strategy {
   decide(state: GameState): Action | null;
 }
 
-const doNothing: Strategy = {
+const idle: Strategy = {
   name: 'Nichts tun',
-  decide: () => null,
+  decide: doNothing,
 };
 
-const repairWeakest: Strategy = {
+/**
+ * The obvious way to play: press send, then keep patching whatever looks worst.
+ * The decision itself lives in engine/strategies.ts, so that `npm run sim` and
+ * balance.spec.ts measure the same player.
+ */
+const naive: Strategy = {
   name: 'Naiv (schwächstes System)',
-  decide(state) {
-    let weakest: Action | null = null;
-    let lowest = Infinity;
-    for (const id of SYSTEM_IDS) {
-      const system = state.systems[id];
-      if (system.lost || system.integrity >= lowest) {
-        continue;
-      }
-      const action: Action = { type: 'repair', systemId: id };
-      if (canApply(state, action)) {
-        lowest = system.integrity;
-        weakest = action;
-      }
-    }
-    return weakest;
-  },
+  decide: patchTheWorst,
 };
 
 /**
@@ -70,7 +62,7 @@ const abandonCellar: Strategy = {
         return action;
       }
     }
-    return repairWeakest.decide(state);
+    return patchTheWorst(state);
   },
 };
 
@@ -81,6 +73,15 @@ function rule(
 ): ProtocolRule {
   return { id, condition, action, enabled: true, firedCount: 0 };
 }
+
+/**
+ * A player who understands the house. Shared with balance.spec.ts, see
+ * engine/strategies.ts for the reasoning behind the order of its checks.
+ */
+const active: Strategy = {
+  name: 'Gutes aktives Spiel',
+  decide: playWell,
+};
 
 /**
  * The idle heart: the player writes two protocols and then walks away. Everything
@@ -145,6 +146,33 @@ const sendEverything: Strategy = {
     }
     return null;
   },
+};
+
+/**
+ * The fourth target of prompt.md section 6: with the best protocols the archive *can*
+ * survive a night, though not without losses. Eight slots, which is what the legacy
+ * grants after a few hundred units, and rules that hold the house rather than the
+ * cellar: shed load, keep the generator and the mast, send without pause.
+ */
+const bestProtocols: Strategy = {
+  name: 'Beste Protokolle (8 h fort)',
+  setup: (state) => ({
+    ...state,
+    protocolSlots: 8,
+    transmitting: 'maps',
+    systems: { ...state.systems, transmitter: { ...state.systems.transmitter, on: true } },
+    protocols: [
+      rule('p1', { kind: 'energy-below', value: 35 }, { type: 'toggle', systemId: 'climate', on: false }),
+      rule('p2', { kind: 'system-integrity-below', systemId: 'generator', value: 55 }, { type: 'repair', systemId: 'generator' }),
+      rule('p3', { kind: 'system-integrity-below', systemId: 'transmitter', value: 45 }, { type: 'repair', systemId: 'transmitter' }),
+      rule('p4', { kind: 'system-integrity-below', systemId: 'custodian', value: 40 }, { type: 'repair', systemId: 'custodian' }),
+      rule('p5', { kind: 'system-integrity-below', systemId: 'pumps', value: 45 }, { type: 'repair', systemId: 'pumps' }),
+      rule('p6', { kind: 'system-integrity-below', systemId: 'workshop', value: 35 }, { type: 'repair', systemId: 'workshop' }),
+      rule('p7', { kind: 'energy-above', value: 130 }, { type: 'toggle', systemId: 'climate', on: true }),
+      rule('p8', { kind: 'system-integrity-below', systemId: 'roof', value: 30 }, { type: 'repair', systemId: 'roof' }),
+    ],
+  }),
+  decide: () => null,
 };
 
 interface RunResult {
@@ -276,7 +304,15 @@ function measureThroughput(): void {
 }
 
 function main(): void {
-  const strategies = [doNothing, repairWeakest, abandonCellar, protocolsOnly, sendEverything];
+  const strategies = [
+    idle,
+    naive,
+    abandonCellar,
+    protocolsOnly,
+    sendEverything,
+    active,
+    bestProtocols,
+  ];
   const seeds = Array.from({ length: SEED_COUNT }, (_, i) => stateToSeed(i * 2654435761));
 
   console.log(`ENTROPIE · Headless-Simulation über ${seeds.length} Seeds`);

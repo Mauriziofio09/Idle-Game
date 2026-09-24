@@ -21,7 +21,6 @@ import {
   SYSTEMS,
   SYSTEM_DECAY,
   TRANSMIT,
-  TRANSMITTER_DECAY_SENDING,
   WATER,
 } from './balance';
 import type { DomainEvent, StepResult } from './domain-events';
@@ -58,7 +57,8 @@ export function production(state: GameState): number {
 
 /** Energy demanded per second by everything currently switched on. */
 export function demand(state: GameState): number {
-  let sum = 0;
+  // The house draws a trickle whatever is switched on; see ENERGY.baseDrawPerSecond.
+  let sum = ENERGY.baseDrawPerSecond;
   for (const id of SYSTEM_IDS) {
     const system = state.systems[id];
     if (!system.lost && system.on) {
@@ -226,7 +226,7 @@ export function step(state: GameState): StepResult {
     // in this house that saves anything.
     const baseDecay =
       id === 'transmitter' && isTransmitting(next)
-        ? TRANSMITTER_DECAY_SENDING
+        ? TRANSMIT.decayWhileSending
         : SYSTEMS[id].baseDecayPerSecond;
     let loss =
       baseDecay *

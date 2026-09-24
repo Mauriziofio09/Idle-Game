@@ -1,4 +1,5 @@
 import { COLLECTIONS, ENERGY, HUMIDITY, SYSTEMS, SYSTEM_DECAY, WATER } from './balance';
+import { SYSTEM_IDS } from './state';
 import { applyAction } from './actions';
 import { createInitialState, isFlooded, type GameState } from './state';
 import { demand, humidityTarget, inflow, outflow, production, step } from './step';
@@ -12,12 +13,55 @@ function allSystemsOff(state: GameState): GameState {
   return current;
 }
 
+/**
+ * An archive whose generator is too weak to cover what is switched on.
+ *
+ * Built by damaging the generator rather than by trusting the starting state to be in
+ * deficit. Milestone 8 raised the generator's output, and at that moment the untouched
+ * archive stopped being undersupplied — every test below would have gone on passing
+ * while proving nothing about rationing. The deficit is asserted here so that a future
+ * change to the numbers fails loudly in one place instead of quietly in five.
+ */
+function undersupplied(patch: Partial<GameState> = {}): GameState {
+  const base = createInitialState('4F2A');
+  const state: GameState = {
+    ...base,
+    systems: { ...base.systems, generator: { ...base.systems.generator, integrity: 10 } },
+    ...patch,
+  };
+  if (production(state) >= demand(state)) {
+    throw new Error('setup no longer starves the archive: production covers demand');
+  }
+  return state;
+}
+
 describe('power', () => {
   it('charges the battery while the generator produces a surplus', () => {
     const base = allSystemsOff({ ...createInitialState('4F2A'), energy: 10 });
     const after = step(base).state;
-    expect(after.energy).toBeCloseTo(10 + production(base), 10);
+    // Switching everything off does not make the house free: it still draws a trickle.
+    expect(after.energy).toBeCloseTo(10 + production(base) - demand(base), 10);
+    expect(demand(base)).toBeCloseTo(ENERGY.baseDrawPerSecond, 10);
     expect(after.supplyRatio).toBe(1);
+  });
+
+  it('keeps drawing when every system is off or lost, so a dead archive falls silent', () => {
+    // Without the standing draw the battery would never empty and "Energie = 0" would
+    // never become true: a house with nothing left running would simply sit there.
+    const base = createInitialState('4F2A');
+    for (const id of SYSTEM_IDS) {
+      base.systems[id] = { integrity: 0, on: false, repairs: 0, lost: true };
+    }
+    const dead = { ...base, energy: 20 };
+
+    expect(production(dead)).toBe(0);
+    expect(demand(dead)).toBeCloseTo(ENERGY.baseDrawPerSecond, 10);
+
+    const result = simulate(dead, 5000);
+    expect(result.state.ended).toBe(true);
+    expect(result.state.endReason).toBe('silence');
+    // It goes quiet within minutes, not whenever the last paper happens to rot.
+    expect(result.state.tick).toBeLessThan(20 * 60);
   });
 
   it('never charges past the battery capacity', () => {
@@ -26,7 +70,7 @@ describe('power', () => {
   });
 
   it('drains the battery before it starves anything', () => {
-    const base = { ...createInitialState('4F2A'), energy: 100 };
+    const base = undersupplied({ energy: 100 });
     const deficit = demand(base) - production(base);
     expect(deficit).toBeGreaterThan(0);
 
@@ -36,7 +80,7 @@ describe('power', () => {
   });
 
   it('shares an empty battery proportionally between all consumers', () => {
-    const base = { ...createInitialState('4F2A'), energy: 0 };
+    const base = undersupplied({ energy: 0 });
     const after = step(base).state;
 
     const expected = production(base) / demand(base);
@@ -49,9 +93,14 @@ describe('power', () => {
   it('lets the pumps move proportionally less water when undersupplied', () => {
     // Two archives identical but for the battery, stepped for real: the starved one
     // must lose ground faster, because its pumps only get their share of the power.
-    const base = createInitialState('4F2A');
+    // Standing water, so that neither archive runs the pumps into an empty cellar:
+    // with a dry house both cases pump only what rained in that tick, the rationing
+    // is clamped away, and the proportionality below would be measuring nothing.
+    const base = undersupplied({ water: 0.9 });
     const starved = step({ ...base, energy: 0 }).state;
     const supplied = step({ ...base, energy: ENERGY.capacity }).state;
+    expect(starved.water).toBeGreaterThan(0);
+    expect(supplied.water).toBeGreaterThan(0);
 
     expect(starved.supplyRatio).toBeLessThan(1);
     expect(supplied.supplyRatio).toBe(1);
@@ -71,7 +120,7 @@ describe('power', () => {
     // Enough entropy that the climate term lands inside 0..100 — at the clamp both
     // the full and the rationed effect would collapse to the same number and the
     // test would pass without proving anything.
-    const base = { ...createInitialState('4F2A'), entropy: 200 };
+    const base = undersupplied({ entropy: 200 });
     const starved = step({ ...base, energy: 0 }).state;
     const ratio = starved.supplyRatio;
     expect(ratio).toBeGreaterThan(0);
@@ -98,7 +147,7 @@ describe('power', () => {
   });
 
   it('reports the swing into undersupply exactly once', () => {
-    const base = { ...createInitialState('4F2A'), energy: 0 };
+    const base = undersupplied({ energy: 0 });
     const first = step(base);
     expect(first.events.some((event) => event.type === 'undersupply-changed')).toBe(true);
     const second = step(first.state);
@@ -233,10 +282,18 @@ describe('humidity', () => {
   });
 });
 
+/** Stops the pumps, so that a flood a test sets up stays where it was put. */
+function withoutPumps(state: GameState): GameState {
+  return applyAction(state, { type: 'toggle', systemId: 'pumps', on: false }).state;
+}
+
 describe('rot', () => {
   it('erases a collection on a fully flooded floor within about a minute', () => {
-    const base = { ...createInitialState('4F2A'), water: 1.2, energy: ENERGY.capacity };
+    // The pumps are stopped, or they would drain the very flood this test is about;
+    // a faster pump made that happen once and the collection quietly survived.
+    const base = withoutPumps({ ...createInitialState('4F2A'), water: 1.2, energy: ENERGY.capacity });
     const result = simulate(base, 300);
+    expect(result.state.water).toBeGreaterThanOrEqual(1);
     expect(result.state.collections.maps.lost).toBe(true);
     expect(result.events).toContainEqual(
       expect.objectContaining({ type: 'collection-lost', collectionId: 'maps' }),
@@ -247,8 +304,9 @@ describe('rot', () => {
     const base = createInitialState('4F2A');
     base.collections.maps.sent = 40;
     base.collections.maps.intact = 60;
-    const after = { ...base, water: 1.2 };
+    const after = withoutPumps({ ...base, water: 1.2 });
     const result = simulate(after, 300).state;
+    expect(result.water).toBeGreaterThanOrEqual(1);
     expect(result.collections.maps.sent).toBe(40);
     expect(result.collections.maps.intact).toBe(0);
   });
