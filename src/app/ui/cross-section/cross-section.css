@@ -1,0 +1,263 @@
+:host {
+  display: block;
+}
+
+/* --- rain ------------------------------------------------------------------ */
+.sky {
+  position: relative;
+  height: var(--space-6);
+  overflow: hidden;
+}
+
+.rain {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background: var(--color-rain);
+}
+
+/* --- roof ------------------------------------------------------------------ */
+.roof {
+  display: flex;
+  gap: var(--space-hair);
+  height: var(--space-2);
+}
+
+.shingle {
+  flex: 1;
+  background: var(--color-border);
+}
+
+/* A hole in the roof is an absence, not a colour. */
+.shingle.broken {
+  background: transparent;
+}
+
+/* --- building -------------------------------------------------------------- */
+.building {
+  position: relative;
+  border: var(--border);
+  border-top: none;
+  overflow: hidden;
+}
+
+.water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-water);
+  border-top: var(--border);
+  transition: height var(--motion-slow) var(--motion-ease);
+}
+
+.floor {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-height: var(--floor-min-height);
+  padding: var(--space-2);
+  border-bottom: var(--border-hairline);
+}
+
+.floor:last-child {
+  border-bottom: none;
+}
+
+/* --- floor tab -------------------------------------------------------------- */
+.floor-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-1);
+  flex: none;
+  width: var(--floor-tab-width);
+  padding: var(--space-2);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-family-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.floor-tab[aria-pressed='true'] {
+  background: var(--color-button-primary-bg);
+  color: var(--color-button-primary-fg);
+}
+
+.floor-index {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.floor-tab[aria-pressed='true'] .floor-index,
+.floor-tab[aria-pressed='true'] .floor-flag {
+  color: var(--color-button-primary-fg);
+}
+
+.floor-name {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-button);
+  line-height: var(--line-height-none);
+}
+
+.floor-flag {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+/* --- chips ------------------------------------------------------------------ */
+.contents {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: var(--chip-min-width);
+  flex: 1 1 var(--chip-min-width);
+  max-width: var(--chip-max-width);
+  padding: var(--space-2);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* The selection button fills the chip; only the thin bar below stays outside it. */
+.chip-select {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: inherit;
+  font-family: var(--font-family-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chip.selected {
+  background: var(--color-button-primary-bg);
+  color: var(--color-button-primary-fg);
+}
+
+.chip-name {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-button);
+  line-height: var(--line-height-none);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-state {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-none);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.selected .chip-state {
+  color: var(--color-button-primary-fg);
+}
+
+.chip-bar {
+  position: relative;
+  display: block;
+  height: var(--space-2);
+  border: var(--border-hairline);
+  background: var(--color-meter-track);
+}
+
+.chip-bar .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-meter-fill);
+  transition: width var(--motion-slow) var(--motion-ease);
+}
+
+/* The only green in the building: what has already left it. */
+.chip-bar .sent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-sent);
+  transition: width var(--motion-slow) var(--motion-ease);
+}
+
+/*
+ * A selected chip is inverted, so its bar has to invert too — otherwise the black fill
+ * disappears into the black chip and the empty remainder reads as the filled part.
+ */
+.chip.selected .chip-bar {
+  border-color: var(--color-lost-fg);
+  background: var(--color-lost-bg);
+}
+
+.chip.selected .chip-bar .fill {
+  background: var(--color-background);
+}
+
+/* Critical is a pattern plus a word, never a colour on its own. */
+.chip.critical .fill {
+  background-color: transparent;
+  background-image: var(--pattern-critical);
+}
+
+.chip.critical.selected .fill {
+  background-image: var(--pattern-critical-inverse);
+}
+
+.chip.off {
+  background: var(--color-surface-subtle);
+}
+
+/* Lost inverts: depth from contrast, as styles.md asks. */
+.chip.lost,
+.chip.lost .chip-state {
+  background: var(--color-lost-bg);
+  color: var(--color-lost-fg);
+}
+
+/*
+ * Phone widths. With the desktop sizes only one chip fits per row, which stretches the
+ * building past a thousand pixels and makes the cross-section unreadable. Two chips per
+ * row keeps the whole archive on one or two screens, which is what makes it playable.
+ */
+@media (max-width: 599px) {
+  /* --breakpoint-compact; a media query cannot read a custom property. */
+  .floor {
+    min-height: var(--floor-min-height-compact);
+    gap: var(--space-1);
+    padding: var(--space-1);
+  }
+
+  .floor-tab {
+    /* Keep the full width: "Erdgeschoss" needs it, and two chips still fit beside it. */
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .contents {
+    gap: var(--space-1);
+  }
+
+  .chip {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 calc(50% - var(--space-1));
+  }
+}

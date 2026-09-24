@@ -1,0 +1,117 @@
+<div class="sky" aria-hidden="true">
+  @for (stroke of rain(); track stroke.index) {
+    <span class="rain" [style.left.%]="stroke.left" [style.height.px]="stroke.length"></span>
+  }
+</div>
+
+<div class="roof" aria-hidden="true">
+  @for (segment of roofSegments(); track segment.index) {
+    <span class="shingle" [class.broken]="segment.broken"></span>
+  }
+</div>
+
+<div class="building">
+  <div class="water" [style.height.%]="waterHeight()" aria-hidden="true"></div>
+
+  @for (floor of floors(); track floor.index) {
+    <div class="floor" [class.flooded]="floor.flooded">
+      <button
+        type="button"
+        class="floor-tab"
+        [attr.aria-pressed]="isFloorSelected(floor.index)"
+        (click)="selectFloor(floor.index)"
+      >
+        <span class="floor-index">{{ floor.indexLabel }}</span>
+        <span class="floor-name">{{ floor.name }}</span>
+        @if (floor.flooded) {
+          <span class="floor-flag">{{ labels.flooded }}</span>
+        }
+      </button>
+
+      <div class="contents">
+        @for (system of floor.systems; track system.id) {
+          <!--
+            The bar sits beside the button, never inside it: a button has presentational
+            children, so a role="meter" nested in one is stripped from the accessibility
+            tree together with all its values.
+          -->
+          <div
+            class="chip system"
+            [class.selected]="system.selected"
+            [class.off]="!system.on && !system.lost"
+            [class.critical]="system.critical"
+            [class.lost]="system.lost"
+          >
+            <button
+              type="button"
+              class="chip-select"
+              [attr.aria-pressed]="system.selected"
+              (click)="selectSystem(system.id)"
+            >
+              <span class="chip-name">{{ system.name }}</span>
+              @if (system.lost) {
+                <span class="chip-state">{{ stateLabels.lost }}</span>
+              } @else {
+                <span class="chip-state">
+                  {{ system.readout }}@if (!system.on) { · {{ stateLabels.off }} }
+                  @if (system.critical) { · {{ stateLabels.critical }} }
+                </span>
+              }
+            </button>
+
+            @if (!system.lost) {
+              <span
+                class="chip-bar"
+                role="meter"
+                [attr.aria-label]="system.meterLabel"
+                [attr.aria-valuenow]="system.integrity"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-valuetext]="system.readout"
+              >
+                <span class="fill" [style.width.%]="system.integrity"></span>
+              </span>
+            }
+          </div>
+        }
+
+        @for (collection of floor.collections; track collection.id) {
+          <div
+            class="chip collection"
+            [class.selected]="collection.selected"
+            [class.lost]="collection.lost"
+          >
+            <button
+              type="button"
+              class="chip-select"
+              [attr.aria-pressed]="collection.selected"
+              (click)="selectCollection(collection.id)"
+            >
+              <span class="chip-name">{{ collection.name }}</span>
+              @if (collection.lost) {
+                <span class="chip-state">{{ stateLabels.lost }}</span>
+              } @else {
+                <span class="chip-state">{{ collection.readout }}</span>
+              }
+            </button>
+
+            @if (!collection.lost) {
+              <span
+                class="chip-bar"
+                role="meter"
+                [attr.aria-label]="collection.meterLabel"
+                [attr.aria-valuenow]="collection.intactShare"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-valuetext]="collection.readout"
+              >
+                <span class="fill" [style.width.%]="collection.intactShare"></span>
+                <span class="sent" [style.width.%]="collection.sentShare"></span>
+              </span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

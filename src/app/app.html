@@ -1,36 +1,40 @@
 <main>
   <header>
-    <app-icon-box size="lg" class="accent">
-      <app-icon name="archive" size="lg" />
+    <app-icon-box size="sm" class="accent">
+      <app-icon name="archive" />
     </app-icon-box>
-    <h1>{{ content.title }}</h1>
-    <p class="subtitle">{{ content.subtitle }}</p>
-    <p class="seed">{{ content.archivePrefix }}{{ seed() }}</p>
+    <div class="titles">
+      <h1>{{ content.title }}</h1>
+      <p class="subtitle">{{ content.subtitle }} · {{ content.archivePrefix }}{{ seed() }}</p>
+    </div>
   </header>
 
-  <app-card [label]="panels.condition">
-    <div class="stats">
-      <app-stat [value]="energy()" [label]="labels.energy" />
-      <app-stat [value]="material()" [label]="labels.material" />
-      <app-stat [value]="entropy()" [label]="labels.entropy" />
-      <app-stat [value]="water()" [label]="labels.water" />
-      <app-stat [value]="runtime()" [label]="labels.runtime" />
-    </div>
+  <app-card class="bar">
+    <app-resource-bar />
   </app-card>
 
-  <app-card [label]="panels.systems">
-    <ul class="systems">
-      @for (system of systems(); track system.id) {
-        <li>
-          <app-meter
-            [label]="system.name + ' · ' + system.floor"
-            [value]="system.integrity"
-            [critical]="system.critical"
-            [lost]="system.lost"
-            [text]="system.stateText"
-          />
-        </li>
-      }
-    </ul>
-  </app-card>
+  @if (endReason(); as reason) {
+    <app-card class="ending">
+      <h2>{{ reason }}</h2>
+      <p class="summary">
+        {{ endLabels.runtime }} {{ runtime() }} · {{ endLabels.saved }} {{ saved() }}
+      </p>
+    </app-card>
+  }
+
+  <div class="stage">
+    <app-card class="section">
+      <app-cross-section />
+    </app-card>
+
+    <div class="panels">
+      <app-card [label]="titles.detail">
+        <app-detail-panel />
+      </app-card>
+
+      <app-card [label]="titles.log">
+        <app-archive-log />
+      </app-card>
+    </div>
+  </div>
 </main>

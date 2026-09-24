@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 
 /**
  * styles.md > Components: full width, 16px vertical padding, 16px/500 label,
@@ -8,7 +15,13 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   selector: 'app-button',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <button [type]="type()" [disabled]="disabled()" [class]="variant()" (click)="pressed.emit()">
+    <button
+      #native
+      [type]="type()"
+      [disabled]="disabled()"
+      [class]="variant()"
+      (click)="pressed.emit()"
+    >
       <ng-content />
     </button>
   `,
@@ -54,4 +67,11 @@ export class Button {
   readonly type = input<'button' | 'submit'>('button');
   readonly disabled = input(false);
   readonly pressed = output<void>();
+
+  private readonly native = viewChild<ElementRef<HTMLButtonElement>>('native');
+
+  /** Lets a panel move focus here when it replaces the control the user was on. */
+  focus(): void {
+    this.native()?.nativeElement.focus();
+  }
 }

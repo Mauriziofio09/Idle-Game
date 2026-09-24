@@ -16,6 +16,10 @@ const twoDecimals = new Intl.NumberFormat(LOCALE, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const resource = new Intl.NumberFormat(LOCALE, {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
 const signedTwoDecimals = new Intl.NumberFormat(LOCALE, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -51,6 +55,19 @@ export function formatAmount(value: number): string {
   return twoDecimals.format(value);
 }
 
+/**
+ * A resource figure as the player reads it: whole when it is whole, one decimal
+ * otherwise. Pillar 7 — small, human numbers, never four decimals of noise.
+ */
+export function formatResource(value: number): string {
+  return resource.format(value);
+}
+
+/** A per-second consumption or output, e.g. "1,2 /s". */
+export function formatPerSecond(value: number): string {
+  return `${resource.format(value)} /s`;
+}
+
 /** Run time as hh:mm:ss. */
 export function formatDuration(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -58,4 +75,14 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.floor((whole % 3600) / 60);
   const rest = whole % 60;
   return [hours, minutes, rest].map((part) => String(part).padStart(2, '0')).join(':');
+}
+
+/** Timestamp for a log line: mm:ss while a run is short, hh:mm:ss once it is long. */
+export function formatLogTime(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const pad = (value: number) => String(value).padStart(2, '0');
+  if (whole < 3600) {
+    return `${pad(Math.floor(whole / 60))}:${pad(whole % 60)}`;
+  }
+  return formatDuration(whole);
 }

@@ -1,7 +1,7 @@
 # PLAN.md — ENTROPIE · Das letzte Archiv
 
 Arbeitsplan zu `prompt.md`. Visuelle Quelle: `styles.md` (schreibgeschützt).
-Status: **M0 + M1 fertig · wartet auf Feedback vor M2.**
+Status: **M0 + M1 + M2 fertig · wartet auf Feedback vor M3.**
 
 ---
 
@@ -162,6 +162,16 @@ Kleinere Ableitungen, gleiche Regel (nur aus Vorhandenem gebaut, kein neuer Farb
 `--border-hairline` 1px für Trenner **innerhalb** einer Karte, damit zwei 2px-Rahmen nicht kollidieren ·
 `--space-7` 32px und `--space-8` 48px nur für Seitenrhythmus („generous whitespace") ·
 `--icon-size-md` 24px / `--icon-size-lg` 32px, weil `styles.md` die Box bemaßt, nicht das Zeichen ·
+`--pattern-critical-inverse` — dieselbe Schraffur für invertierte Flächen (ausgewählter Chip),
+weil Schwarz auf Schwarz verschwindet ·
+`--space-hair` 2px als halbe Stufe unter `--space-1`, nur für Haarfugen (Dachziegel, Log-Ausrichtung) ·
+`--floor-min-height` 76px / `--floor-min-height-compact` 64px / `--floor-tab-width` 92px /
+`--chip-min-width` 108px / `--chip-max-width` 180px — Maße des Querschnitts; `styles.md` bemaßt
+Karten, kein Gebäude, deshalb aus der Abstandsskala gebaut ·
+`--panel-column-min` 320px / `--log-max-height` 320px / `--log-time-width` 56px — Panel-Maße ·
+`--breakpoint-compact` 600px — zweiter Umbruch, unterhalb dessen zwei Chips pro Reihe stehen,
+damit das Gebäude auf dem Handy lesbar bleibt (nur Dokumentation: `@media` kann keine
+Custom Property lesen) ·
 `--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten.
 
 Kontrastprüfung (WCAG AA, `styles.md` nennt keine eigenen Werte):
@@ -231,14 +241,15 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] `npm run sim` v1 (Strategie „nichts tun" + „naiv")
 
 ### M2 · Erstes Spielbares
-- [ ] **`styles.md` erneut lesen**
-- [ ] `cross-section` (SVG): 5 Etagen, steigendes Wasser, Regen, Dachschaden, Systeme, Sammlungen
-- [ ] `resource-bar` mit Netto-Raten
-- [ ] `detail-panel` mit Kostenvorschau („+21 % · 12 Material · Entropie +3")
-- [ ] `archive-log` (`aria-live="polite"`)
-- [ ] `GameLoopService` (rAF + Akkumulator, visibilitychange)
-- [ ] Ein Run ist vollständig spielbar (ohne Senden)
-- [ ] Screenshots 1440 px / 375 px gegen `styles.md` geprüft
+- [x] **`styles.md` erneut lesen**
+- [x] `cross-section` (HTML/CSS statt SVG, siehe Entscheidung 13): 5 Etagen, steigendes Wasser,
+      Regen, Dachschaden, Systeme, Sammlungen
+- [x] `resource-bar` mit Netto-Raten
+- [x] `detail-panel` mit Kostenvorschau („+21 % · 12 Material · Entropie +3")
+- [x] `archive-log` (`aria-live="polite"`)
+- [x] `GameLoopService` (rAF + Akkumulator, visibilitychange)
+- [x] Ein Run ist vollständig spielbar (ohne Senden)
+- [x] Screenshots 1440 px / 375 px gegen `styles.md` geprüft
 
 ### M3 · Speichern & Offline
 - [ ] `localStorage` `entropie.save`, `schemaVersion`, 2 Slots
@@ -322,6 +333,15 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 11. **Rhythmus (beantwortet):** M0 und M1 werden zusammen geliefert (beide ohne sichtbares Spiel),
    danach Stopp nach jedem Meilenstein.
 12. **README (beantwortet):** Englisch. Spiel-UI, Lore und Log bleiben deutsch.
+13. **Querschnitt in HTML/CSS, nicht SVG** (M2). `prompt.md` 7 erlaubt beides. Jedes System und
+    jede Sammlung ist damit ein echter `<button>`: Tastaturfokus, `aria-pressed` und Trefferflächen
+    gibt es geschenkt, statt sie im SVG nachzubauen. Das Wasser ist ein absolut positioniertes
+    Element mit `height`-Transition, der Regen sind 1px-Striche, deren **Anzahl** die Stärke zeigt
+    (keine Animation — damit ist `prefers-reduced-motion` von vornherein erfüllt).
+14. **Etagen-Tabs auf dem Handy erst in M7.** `prompt.md` 7 nennt „Panels als Tabs" für Mobile.
+    In M2 gibt es nur zwei Panels (Auswahl, Log); Tabs lohnen sich ab M4, wenn die Protokolle
+    dazukommen. Bis dahin scrollt die Seite — bei 375 px ist der Querschnitt 538 px hoch und
+    vollständig bedienbar. Steht als offener Punkt in M7.
 
 ## 7 · Risiken & Beobachtungen
 
@@ -399,3 +419,52 @@ füllen eine Lücke — alle vier stehen auch als Kommentar an der jeweiligen Co
    (Grundfeuchte + Wassernähe + Dachleck − Klima, weich angenähert), nennt aber keine Zahlen.
    Gewählt: Grundfeuchte `20 + 0,25 × S`, Wassernähe `45` über `2` Etagen Reichweite,
    Glättung `2 %` des Restabstands pro Sekunde (Zeitkonstante ~50 s). Alle in `balance.ts`.
+
+---
+
+## 10 · Stand nach M2
+
+Gebaut: `game/game-store.ts` (Signals, einziger Weg in die Engine), `game/game-loop.ts`
+(rAF + Zeitstempel-Akkumulator, Pause bei verstecktem Tab, Aufholen über `simulate`),
+`game/log.ts` (Domain-Event → deutscher Satz), `ui/cross-section`, `ui/resource-bar`,
+`ui/detail-panel`, `ui/archive-log`.
+
+**Gemessen im Browser:** 1440 px → `main` 1200 px, Raster zweispaltig · 375 px → kein
+horizontaler Überlauf, Gebäude 538 px hoch, zwei Chips pro Reihe, alle Etagennamen passen ·
+Konsole ohne Fehler · Reparatur-Durchstich: Pumpen 55 → 83 %, Material −8, Energie −10,
+Entropie +3, nächste Vorschau korrekt teurer und schwächer.
+
+**In M2 nachgebessert:** Dachschäden werden verteilt statt als Block abgetragen (las sich wie
+ein Balken), Regendichte erhöht, Balken auf ausgewählten (invertierten) Chips invertiert —
+sonst verschwindet die schwarze Füllung im schwarzen Chip und der leere Rest wirkt gefüllt.
+
+**Offen für M7:** Panels als Tabs auf dem Handy (Entscheidung 14).
+
+### Nachträge aus der M2-Review
+
+Die Review mit frischem Kontext fand acht echte Punkte. Behoben:
+
+1. **Frame-Leak** (`game/game-loop.ts`). Wird die Seite in einem Hintergrund-Tab geöffnet,
+   fordert `start()` ein Frame an, das nie feuert. Beim Wechsel in den Tab forderte `resume()`
+   ein zweites an und verlor den Griff auf das erste — ein Waisen-Frame, das auch nach `stop()`
+   und nach `onDestroy` weiter tickte. `resume()` bricht jetzt zuerst ab. Test dazu.
+2. **Zeitschranke fehlte im Frame-Pfad** (schon vor der Review behoben): Ein Rechner, der aus
+   dem Ruhezustand aufwacht, feuert kein `visibilitychange`; die Lücke kam als ein Frame.
+3. **`role="meter"` steckte in einem `<button>`** (`ui/cross-section`). Ein Button hat
+   *presentational children* — die Balken und all ihre Werte wurden aus dem Accessibility-Baum
+   entfernt. Der Chip ist jetzt ein Container: Auswahl-Button oben, Balken als Geschwister
+   darunter. Ein Test prüft, dass kein Meter je wieder in einem Button landet.
+4. **Fokus fiel beim Rückbau zweimal auf `<body>`**: erst beim Einblenden der Bestätigung,
+   dann beim Leeren des Panels. Der Fokus wandert jetzt auf die Bestätigung bzw. die Überschrift.
+5. **Bestätigung blieb über einen Auswahlwechsel hinweg scharf** — jetzt ein `linkedSignal`,
+   das an der Auswahl hängt.
+6. **`integrity >= 100`** im Detail-Panel kam aus der Luft statt aus `REPAIR.maxIntegrity`;
+   der Sammlungsbalken nahm `unitsEach === 100` an und rechnet jetzt mit Anteilen.
+7. **Texte außerhalb `de.ts`** („Verfall", „max") und zwei rohe Zahlen (Etagenindex) —
+   beides jetzt über `de.ts` bzw. `format.ts`. Im unterversorgten Fall stand eine nackte
+   Prozentzahl ohne Wort; sie heißt jetzt „Versorgung 74 %".
+8. **Maße und Abstände außerhalb der Skala** — als Tokens 11–14 oben nachgetragen.
+
+Zwei schwache Tests verschärft (der Balken-Test prüfte nur, dass Attribute nicht leer sind;
+der Seed-Test behauptete Unterschiedlichkeit, prüfte aber nur das Format) und drei fehlende
+Bereiche ergänzt: `format.spec.ts`, Ende mitten im Aufholen, kritischer Zustand nie nur über Farbe.

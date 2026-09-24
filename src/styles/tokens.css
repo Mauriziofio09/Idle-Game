@@ -82,6 +82,8 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  /* DERIVED 11 — a half step below the scale, for hairline gaps such as roof shingles. */
+  --space-hair: 2px;
   --space-7: 32px; /* DERIVED — page-level rhythm only ("generous whitespace") */
   --space-8: 48px; /* DERIVED — page-level rhythm only */
 
@@ -94,6 +96,20 @@
   --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
   /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
   --stat-column-min: 96px;
+  /* DERIVED 12 — cross-section dimensions. styles.md sizes cards, not a building, so these
+     are built from the spacing scale: see PLAN.md "Ableitungen aus styles.md". */
+  --floor-min-height: 76px;
+  --floor-min-height-compact: 64px;
+  --floor-tab-width: 92px;
+  --chip-min-width: 108px;
+  --chip-max-width: 180px;
+  /* DERIVED 13 — panel dimensions. */
+  --panel-column-min: 320px;
+  --log-max-height: 320px;
+  --log-time-width: 56px;
+  /* DERIVED 14 — the phone breakpoint, below which two chips per row keep the building
+     readable. Documentation only; a @media rule cannot read a custom property. */
+  --breakpoint-compact: 600px;
 
   /* ----------------------------------------------------------------- Motion */
   /* DERIVED 8 — styles.md is silent on motion; linear and short is the most restrained reading. */
@@ -113,6 +129,14 @@
     45deg,
     var(--color-border) 0,
     var(--color-border) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+  /* The same hatch for inverted surfaces, where black on black would vanish. */
+  --pattern-critical-inverse: repeating-linear-gradient(
+    45deg,
+    var(--color-background) 0,
+    var(--color-background) 2px,
     transparent 2px,
     transparent 6px
   );

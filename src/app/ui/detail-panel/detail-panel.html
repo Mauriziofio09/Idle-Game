@@ -1,0 +1,94 @@
+@if (system(); as system) {
+  <h2 #heading tabindex="-1">{{ system.name }}</h2>
+  <p class="meta">{{ labels.floor }} {{ system.floor }}</p>
+
+  <app-meter
+    [label]="labels.integrity"
+    [value]="system.integrity"
+    [critical]="system.critical"
+    [lost]="system.lost"
+    [text]="system.lost ? stateLabels.lost : undefined"
+  />
+
+  @if (system.lost) {
+    <p class="hint">{{ hints.lost }}</p>
+  } @else {
+    <dl class="facts">
+      <dt>{{ labels.state }}</dt>
+      <dd>{{ system.on ? stateLabels.on : stateLabels.off }}</dd>
+      @if (system.draw > 0) {
+        <dt>{{ labels.consumption }}</dt>
+        <dd>{{ system.drawReadout }}</dd>
+      }
+    </dl>
+
+    <div class="actions">
+      <div class="action">
+        <app-button
+          variant="primary"
+          [disabled]="!system.canRepair"
+          (pressed)="repair(system.id)"
+        >
+          {{ actionLabels.repair }}
+        </app-button>
+        <p class="hint">{{ system.repairBlockedReason ?? system.repairHint }}</p>
+      </div>
+
+      <div class="action">
+        <app-button variant="secondary" (pressed)="toggle(system.id, !system.on)">
+          {{ system.on ? actionLabels.switchOff : actionLabels.switchOn }}
+        </app-button>
+        <p class="hint">{{ hints.offConserves }}</p>
+      </div>
+
+      <div class="action">
+        @if (confirmingDismantle() === system.id) {
+          <p class="warning">{{ system.dismantleWarning }}</p>
+          <app-button #confirmButton variant="primary" (pressed)="dismantle(system.id)">
+            {{ actionLabels.dismantleConfirm }}
+          </app-button>
+          <app-button variant="secondary" (pressed)="cancelDismantle()">
+            {{ actionLabels.cancel }}
+          </app-button>
+        } @else {
+          <app-button variant="secondary" (pressed)="askDismantle(system.id)">
+            {{ actionLabels.dismantle }}
+          </app-button>
+          <p class="hint">{{ system.dismantleHint }}</p>
+        }
+      </div>
+    </div>
+  }
+} @else if (collection(); as collection) {
+  <h2 #heading tabindex="-1">{{ collection.name }}</h2>
+  <p class="meta">{{ labels.floor }} {{ collection.floor }}</p>
+
+  <app-meter
+    [label]="labels.intact"
+    [value]="collection.intact"
+    [lost]="collection.lost"
+    [text]="collection.lost ? stateLabels.lost : undefined"
+  />
+
+  <dl class="facts">
+    <dt>{{ labels.sent }}</dt>
+    <dd>{{ collection.sent }}</dd>
+    <dt>{{ labels.rotted }}</dt>
+    <dd>{{ collection.rotted }}</dd>
+  </dl>
+} @else if (floor(); as floor) {
+  <h2 #heading tabindex="-1">{{ floor.name }}</h2>
+  <p class="meta">{{ labels.floor }} {{ floor.indexLabel }}</p>
+
+  <app-meter [label]="labels.humidity" [value]="floor.humidity" />
+
+  <dl class="facts">
+    <dt>{{ labels.state }}</dt>
+    <dd>{{ floor.flooded ? labels.flooded : labels.dry }}</dd>
+    <dt>{{ labels.onThisFloor }}</dt>
+    <dd>{{ floor.contents }}</dd>
+  </dl>
+} @else {
+  <h2 #heading tabindex="-1">{{ titles.nothingSelected }}</h2>
+  <p class="hint">{{ titles.nothingSelectedHint }}</p>
+}
