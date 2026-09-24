@@ -1,0 +1,86 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.intro,
+.fired {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body);
+}
+
+/* The depot being down is a state, so it is named, not coloured. */
+.warning {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-button);
+  border-top: var(--border);
+  border-bottom: var(--border);
+  padding: var(--space-3) 0;
+}
+
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius);
+}
+
+/* A switched-off rule is set back by its surface, and still says "Aktiv" is unchecked. */
+.rule.disabled {
+  background: var(--color-surface-subtle);
+}
+
+.sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.word {
+  font-size: var(--font-size-body);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.row .fired {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-label);
+}
+
+.footer,
+.reserve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.reserve .intro {
+  flex-basis: 100%;
+}

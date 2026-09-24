@@ -62,6 +62,9 @@ export function describe(event: DomainEvent): { text: string; kind: LogKind } | 
         kind: 'end',
         text: event.reason === 'silence' ? LOG.endedSilence : LOG.endedNothingLeft,
       };
+    // A fired protocol needs no line of its own: the action it took already wrote one.
+    // Who acted is answered by the rule's own counter and by the return summary.
+    case 'protocol-fired':
     case 'transmission-started':
     case 'transmission-stopped':
     case 'transmission-completed':

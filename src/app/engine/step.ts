@@ -24,6 +24,7 @@ import {
   WATER,
 } from './balance';
 import type { DomainEvent, StepResult } from './domain-events';
+import { runProtocols } from './protocols';
 import {
   COLLECTION_IDS,
   SYSTEM_IDS,
@@ -233,15 +234,22 @@ export function step(state: GameState): StepResult {
     }
   }
 
-  // 7 — Is the archive still speaking?
-  const endReason = checkEnd(next);
+  // 7 — The custodian depot acts, on the state the player would now see. Protocols go
+  //     through the same applyAction the player uses, which is what keeps an evening
+  //     away identical to an evening at the keyboard.
+  const automated = runProtocols(next);
+  const after = automated.state;
+  events.push(...automated.events);
+
+  // 8 — Is the archive still speaking?
+  const endReason = checkEnd(after);
   if (endReason) {
-    next.ended = true;
-    next.endReason = endReason;
-    events.push({ type: 'run-ended', tick: next.tick, reason: endReason });
+    after.ended = true;
+    after.endReason = endReason;
+    events.push({ type: 'run-ended', tick: after.tick, reason: endReason });
   }
 
-  return { state: next, events };
+  return { state: after, events };
 }
 
 function checkEnd(state: GameState): GameState['endReason'] {

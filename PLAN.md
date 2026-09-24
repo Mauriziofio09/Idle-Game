@@ -1,7 +1,7 @@
 # PLAN.md — ENTROPIE · Das letzte Archiv
 
 Arbeitsplan zu `prompt.md`. Visuelle Quelle: `styles.md` (schreibgeschützt).
-Status: **M0–M3 fertig · wartet auf Feedback vor M4.**
+Status: **M0–M4 fertig · wartet auf Feedback vor M5.**
 
 ---
 
@@ -172,7 +172,24 @@ Karten, kein Gebäude, deshalb aus der Abstandsskala gebaut ·
 `--breakpoint-compact` 600px — zweiter Umbruch, unterhalb dessen zwei Chips pro Reihe stehen,
 damit das Gebäude auf dem Handy lesbar bleibt (nur Dokumentation: `@media` kann keine
 Custom Property lesen) ·
-`--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten.
+`--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten ·
+`--field-number-width` 5,5em für ein Zahlenfeld mit vier Stellen plus Einheit ·
+`--checkbox-size` = `--space-4` für das Kästchen.
+
+Formularelemente (M4, `src/styles.css`): `styles.md` nennt Inputs unter „Shape Language"
+(kein Radius, 2px schwarz, kein Schatten), beschreibt aber keine Select- oder Checkbox-Optik.
+Abgeleitet, ausschließlich aus vorhandenen Tokens:
+`.field` — Rahmen, Radius, Schatten, Schrift und Innenabstand wie eine Karte, plus
+`appearance: none`, weil WebKit sonst die gerundete, gefaste Systemsteuerung zeichnet und
+Autorenrahmen ignoriert ·
+`.select::after` — das mit `appearance: none` verlorene Pfeilchen als **massives Dreieck aus
+Rahmenfarben** (eine Form, kein Bild, kein Gradient) ·
+`button.small` — bewusste Abweichung von den einzigen Buttons, die `styles.md` definiert
+(dort: volle Breite, 16px/500, 16px vertikal). In einer Zeile aus sechs Bedienelementen wäre
+ein Button über die volle Breite unbrauchbar; Form, Rahmen und Radius bleiben identisch, nur
+Größe und Schriftgrad sinken auf die Label-Stufe ·
+`input[type='checkbox']` — Quadrat mit 2px-Rahmen, das sich im Zustand „an" füllt; dieselbe
+Formsprache wie alles andere statt der System-Checkbox.
 
 Kontrastprüfung (WCAG AA, `styles.md` nennt keine eigenen Werte):
 `#1A1A1A` auf Weiß = 17.4:1 ✅ · `#6B7280` auf Weiß = 4.8:1 ✅ (AA für Text ab 4.5)
@@ -261,12 +278,12 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Performance: 86 400 Ticks < 1,5 s (gemessen, Zahl im Bericht)
 
 ### M4 · Protokolle
-- [ ] `protocols.ts`: Bedingungen, Aktionen, Priorität, Depot-Abklingzeit `max(5, 20/(I/100))`
-- [ ] Ausführung nur bei Depot an + versorgt + bezahlbar
-- [ ] Editor-UI: deutscher Satz, Dropdowns + Zahlenfeld, Reihenfolge tastaturbedienbar, Auslöse-Zähler
-- [ ] 2 Slots zu Beginn, max. 8
-- [ ] Offline nutzt dieselbe Logik (Test)
-- [ ] Tests: Priorität · Abklingzeit · Bezahlbarkeit · keine Ausführung ohne Depot/Strom
+- [x] `protocols.ts`: Bedingungen, Aktionen, Priorität, Depot-Abklingzeit `max(5, 20/(I/100))`
+- [x] Ausführung nur bei Depot an + versorgt + bezahlbar
+- [x] Editor-UI: deutscher Satz, Dropdowns + Zahlenfeld, Reihenfolge tastaturbedienbar, Auslöse-Zähler
+- [x] 2 Slots zu Beginn, max. 8
+- [x] Offline nutzt dieselbe Logik (Test)
+- [x] Tests: Priorität · Abklingzeit · Bezahlbarkeit · keine Ausführung ohne Depot/Strom
 
 ### M5 · Ziel & Ende
 - [ ] Sendemast + Senden (eine Sammlung gleichzeitig), Mastverschleiß
@@ -280,7 +297,7 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 ### M6 · Tiefe (SOLL)
 - [ ] Umlagern (30 s unterwegs, max. 3 pro Etage)
 - [ ] Verheizen (zweistufige Bestätigung, eigener Log-Eintrag, inszeniert)
-- [ ] Materialreserve für Protokolle
+- [x] Materialreserve für Protokolle
 - [ ] Szenarien („Dürresommer", „Der Turm")
 - [ ] Tagesarchiv (Seed aus Datum)
 
@@ -537,3 +554,82 @@ Sieben echte Punkte. Behoben:
 zoneless Change Detection** anfordert. Die Tests maßen also nie nur den Loop. Der Frame-Takt
 liegt jetzt hinter `FRAME_SCHEDULER` (wie der Speicher hinter `GAME_STORAGE`), und die Tests
 treiben ausschließlich den Takt des Spiels.
+
+---
+
+## 12 · Stand nach M4
+
+Gebaut: `engine/protocols.ts` (Bedingungen, Priorität, Abklingzeit, Materialreserve),
+Protokolle laufen in `step` und damit offline wie online, `protocol-fired` als Domain-Event,
+Regelverwaltung im Store, `ui/protocols` als Satz-Editor, Regeln und Reserve im Spielstand
+(Schema 2 mit Migration 1→2), Protokoll-Läufe in der Rückkehr-Zusammenfassung,
+Strategie „Protokolle, dann weggehen" im Simulator.
+
+**Entscheidungen:**
+17. **Protokolle dürfen nicht zurückbauen.** `prompt.md` 5.9 listet Reparieren, Ein/Aus,
+    Senden und Umlagern — keinen Rückbau. Ein System endgültig herzugeben bleibt eine
+    Entscheidung, die der Spieler persönlich trifft. Der Typ `ProtocolAction` ist deshalb
+    enger als `Action`, und der Validator lehnt ein `dismantle` in einer Regel ab.
+18. **Die Abklingzeit läuft mit dem Versorgungsanteil, nicht binär.** `prompt.md` 5.9 sagt
+    „unversorgt → keine Protokolle". Bei `supplyRatio = 0` passiert nichts — das ist erfüllt.
+    Dazwischen zählt die Abklingzeit proportional langsamer herunter, wie es 5.6 für jeden
+    eingeschalteten Verbraucher vorschreibt. Dieselbe Lesart wie bei der Klimatechnik (M1).
+19. **Ein gefeuertes Protokoll bekommt keine eigene Log-Zeile.** Die Aktion schreibt bereits
+    eine („Pumpen repariert. 84 %."); eine zweite wäre Verdopplung. Wer gehandelt hat,
+    beantworten der Zähler an der Regel und die Rückkehr-Zusammenfassung.
+20. **Regel-IDs werden aus den vorhandenen Regeln abgeleitet**, nicht aus einem Zähler —
+    ein Sitzungszähler würde nach dem Laden eines Spielstands Dopplungen vergeben.
+21. **`minCooldownSeconds` ist unerreichbar.** `20 / (I/100)` ist bei `I ≤ 100` nie unter 20 s.
+    Der Wert aus `prompt.md` bleibt als Sicherheitsboden stehen und ist getestet.
+
+**Messung, die M8 braucht:** Die Strategie „zwei Protokolle schreiben, dann weggehen"
+löst im Median nur **3 Aktionen** pro Run aus (P90 5) und verlängert ihn auf 12,3 min.
+Nicht die Abklingzeit begrenzt das — bei 20 s wären in 12 min rund 36 Aktionen möglich —
+sondern die Bezahlbarkeit: Eine Reparatur kostet 10 Energie, und das Archiv steht ab
+Sekunde 80 dauerhaft bei 0. **Bei der aktuellen Balance ist das Idle-Herz mechanisch
+korrekt, aber praktisch fast wirkungslos.** Das ist derselbe Befund wie bei „Naiv" aus M1,
+nur schärfer, und gehört nach M8 — sinnvoll erst nach M5, weil der Sendemast die
+Energiekurve nochmals verschiebt.
+
+### Nachträge aus der M4-Review
+
+Acht Punkte. Behoben:
+
+1. **Umsortieren und Entfernen verloren den Tastaturfokus.** Schiebt man eine Regel nach oben,
+   wird genau der gedrückte Knopf deaktiviert — der Browser wirft den Fokus auf `<body>`, und
+   der Spieler verliert seine Position. Derselbe Fehlertyp wie in M2 und M3, im neuen Editor
+   erneut aufgetreten, weil er gar keine Fokus-Führung hatte. Jetzt folgt der Fokus der Regel;
+   beim Entfernen landet er auf der Nachbarregel oder auf „Regel hinzufügen".
+2. **Native Select- und Checkbox-Optik widersprach `styles.md`.** Ohne `appearance: none`
+   zeichnet WebKit die gerundete, gefaste Systemsteuerung mit Innenschatten und ignoriert
+   Autorenrahmen — auf genau der Plattform, auf der dieses Projekt entwickelt wird. Beide
+   werden jetzt aus Tokens gezeichnet; im Browser nachgemessen: `appearance: none`,
+   Radius 0, Rahmen 2px.
+3. **Die Ableitungen der Formularelemente waren nicht dokumentiert** — nachgetragen (oben).
+4. **`width: 5.5em`** war eine rohe Zahl — jetzt Token 15, dazu Token 16 für die Checkbox.
+5. **Ein `aria-label` wurde im Template aus Text und Zahl zusammengesetzt.** Beides gehört
+   nach `de.ts` bzw. durch `format.ts`. Gleichzeitig behoben: Alle Regeln trugen identische
+   Namen („Bedingung", „Schwelle" …); jetzt nennt jeder Name seine Regel („Regel 2: Schwelle
+   in %"), und die Einheit steht im Namen statt nur als Nachbar-Span.
+6. **Eine verworfene Zahl blieb im Feld stehen.** Tippt man 99999 in die Materialreserve, die
+   schon auf dem Maximum steht, ändert sich der Zustand nicht — die Bindung feuert nicht, und
+   das Feld zeigt weiter 99999. Der Spieler sieht eine Zahl, mit der das Archiv nicht rechnet.
+   Beide Zahlenfelder schreiben den geklemmten Wert jetzt zurück.
+7. **`depotRate` formatierte ein Intervall als `hh:mm:ss`.** `prompt.md` 5.1 schreibt das für
+   die Laufzeit vor, nicht für eine Abklingzeit — jetzt „Eine Aktion alle 33 s."
+8. **Zwei Tests konnten nicht fehlschlagen** und **die Regel-API war ungetestet** (siehe unten).
+
+**Dabei gefunden, was die Review nicht sah:** `createRule` leitete die ID aus dem aktuellen
+Zustand ab. Zweimal aufgerufen, bevor eine Regel hinzugefügt wird, vergibt sie zweimal
+dieselbe ID — ein `updateProtocol` hätte dann beide Regeln geändert. Die UI war nicht
+betroffen, die API lud aber zum Fehler ein. `addProtocol(condition, action)` baut und hängt
+die Regel jetzt in einem Schritt an; `createRule` ist privat.
+
+**Tests:** „offline == online" verglich `simulate` mit einer handgeschriebenen `step`-Schleife —
+`simulate` *ist* diese Schleife. Der Test prüft jetzt durchgespielt gegen `simulateInChunks`
+gegen ungleiche Chunks, und belegt, dass die Regel dabei mehrfach feuert. Der Reserve-Test
+behauptete „schränkt nur die Automatik ein", prüfte aber nur, dass eine Zahl unverändert
+bleibt; er lässt jetzt das Depot ablehnen und den Spieler dieselbe Ausgabe tätigen. Neu dazu:
+Chunk-Invarianz **mit Regeln im Zustand** (der Determinismus-Test lief bisher immer mit leerer
+Regelliste) und sieben Tests für die Regel-API im Store — Slot-Grenze, eindeutige IDs, Zähler
+überlebt Umsortieren und Bearbeiten, Reserve-Klemmung, Regeln überleben Speichern und Laden.

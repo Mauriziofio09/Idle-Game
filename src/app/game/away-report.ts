@@ -25,6 +25,8 @@ export interface AwayReport {
   lostCollections: CollectionId[];
   floodedFloors: number[];
   endedWhileAway: boolean;
+  /** How often each protocol fired while away, keyed by rule id. */
+  protocolRuns: Record<string, number>;
 }
 
 export function buildAwayReport(options: {
@@ -39,6 +41,7 @@ export function buildAwayReport(options: {
   const lostSystems: SystemId[] = [];
   const lostCollections: CollectionId[] = [];
   const floodedFloors: number[] = [];
+  const protocolRuns: Record<string, number> = {};
   let endedWhileAway = false;
 
   for (const event of options.events) {
@@ -51,6 +54,9 @@ export function buildAwayReport(options: {
         break;
       case 'floor-flooded':
         floodedFloors.push(event.floor);
+        break;
+      case 'protocol-fired':
+        protocolRuns[event.ruleId] = (protocolRuns[event.ruleId] ?? 0) + 1;
         break;
       case 'run-ended':
         endedWhileAway = true;
@@ -72,5 +78,6 @@ export function buildAwayReport(options: {
     lostCollections,
     floodedFloors,
     endedWhileAway,
+    protocolRuns,
   };
 }

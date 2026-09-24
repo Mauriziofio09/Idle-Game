@@ -8,6 +8,7 @@
  */
 
 import { COLLECTIONS, ENERGY, FLOOR_COUNT, PROTOCOLS } from '../engine/balance';
+import type { ProtocolAction, ProtocolCondition, ProtocolRule } from '../engine/protocol-types';
 import {
   COLLECTION_IDS,
   SCHEMA_VERSION,
@@ -170,6 +171,19 @@ export function parseSaveFile(json: string): ReadResult {
  * raw object of version n+1 — never a typed GameState, because the validator runs last.
  */
 const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
+  // v2 added the material reserve; rules were always empty before, so nothing else moves.
+  1: (raw) => {
+    const state = isObject(raw['state']) ? { ...raw['state'] } : {};
+    return {
+      ...raw,
+      schemaVersion: 2,
+      state: {
+        ...state,
+        schemaVersion: 2,
+        materialReserve: PROTOCOLS.defaultMaterialReserve,
+      },
+    };
+  },
   // v0 was the pre-release shape: it had no supply ratio and knew nothing of protocols.
   0: (raw) => {
     const state = isObject(raw['state']) ? { ...raw['state'] } : {};
@@ -237,6 +251,7 @@ export function validateState(input: unknown): GameState | null {
     !isInRange(material, 0, Number.MAX_SAFE_INTEGER) ||
     !isInRange(supplyRatio, 0, 1 + EPSILON) ||
     !isInRange(protocolSlots, 0, PROTOCOLS.maxSlots) ||
+    !isInRange(input['materialReserve'], 0, PROTOCOLS.maxMaterialReserve) ||
     !isInRange(custodianCooldown, 0, Number.MAX_SAFE_INTEGER)
   ) {
     return null;
@@ -285,6 +300,11 @@ export function validateState(input: unknown): GameState | null {
     return null;
   }
 
+  const protocols = validateProtocols(input['protocols'], protocolSlots);
+  if (!protocols) {
+    return null;
+  }
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     seed,
@@ -299,13 +319,107 @@ export function validateState(input: unknown): GameState | null {
     collections,
     transmitting: transmitting as CollectionId | null,
     supplyRatio,
-    // Protocols arrive in milestone 4; until then a save carries an empty list.
-    protocols: [],
+    protocols,
     protocolSlots,
+    materialReserve: input['materialReserve'] as number,
     custodianCooldown,
     ended,
     endReason: endReason as GameState['endReason'],
   };
+}
+
+/** Rules are player-authored data, so every field is checked before it is trusted. */
+function validateProtocols(input: unknown, slots: number): ProtocolRule[] | null {
+  if (!Array.isArray(input) || input.length > slots) {
+    return null;
+  }
+
+  const rules: ProtocolRule[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (!isObject(raw)) {
+      return null;
+    }
+    const id = raw['id'];
+    if (typeof id !== 'string' || id.length === 0 || id.length > 64 || seen.has(id)) {
+      return null;
+    }
+    seen.add(id);
+
+    if (typeof raw['enabled'] !== 'boolean') {
+      return null;
+    }
+    const firedCount = raw['firedCount'];
+    if (!isInRange(firedCount, 0, Number.MAX_SAFE_INTEGER)) {
+      return null;
+    }
+
+    const condition = validateCondition(raw['condition']);
+    const action = validateProtocolAction(raw['action']);
+    if (!condition || !action) {
+      return null;
+    }
+    rules.push({ id, condition, action, enabled: raw['enabled'], firedCount });
+  }
+  return rules;
+}
+
+function validateCondition(input: unknown): ProtocolCondition | null {
+  if (!isObject(input)) {
+    return null;
+  }
+  const value = input['value'];
+  if (!isFiniteNumber(value)) {
+    return null;
+  }
+
+  switch (input['kind']) {
+    case 'system-integrity-below':
+      return isSystemId(input['systemId'])
+        ? { kind: 'system-integrity-below', systemId: input['systemId'], value }
+        : null;
+    case 'water-above':
+      return { kind: 'water-above', value };
+    case 'energy-below':
+      return { kind: 'energy-below', value };
+    case 'energy-above':
+      return { kind: 'energy-above', value };
+    case 'humidity-above': {
+      const floor = input['floor'];
+      return isInRange(floor, 0, FLOOR_COUNT - 1) && Number.isInteger(floor)
+        ? { kind: 'humidity-above', floor, value }
+        : null;
+    }
+    case 'collection-below':
+      return isCollectionId(input['collectionId'])
+        ? { kind: 'collection-below', collectionId: input['collectionId'], value }
+        : null;
+    case 'material-above':
+      return { kind: 'material-above', value };
+    default:
+      return null;
+  }
+}
+
+function validateProtocolAction(input: unknown): ProtocolAction | null {
+  if (!isObject(input) || !isSystemId(input['systemId'])) {
+    return null;
+  }
+  if (input['type'] === 'repair') {
+    return { type: 'repair', systemId: input['systemId'] };
+  }
+  if (input['type'] === 'toggle' && typeof input['on'] === 'boolean') {
+    return { type: 'toggle', systemId: input['systemId'], on: input['on'] };
+  }
+  return null;
+}
+
+function isSystemId(value: unknown): value is SystemId {
+  return typeof value === 'string' && (SYSTEM_IDS as readonly string[]).includes(value);
+}
+
+function isCollectionId(value: unknown): value is CollectionId {
+  return typeof value === 'string' && (COLLECTION_IDS as readonly string[]).includes(value);
 }
 
 function validateSystems(input: unknown): GameState['systems'] | null {

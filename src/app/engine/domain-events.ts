@@ -6,6 +6,7 @@
  * a second language a content change rather than an engine change.
  */
 
+import type { ProtocolAction } from './protocol-types';
 import type { CollectionId, EndReason, SystemId } from './state';
 
 export type ActionRejection =
@@ -28,6 +29,7 @@ export type DomainEvent =
   | { type: 'transmission-stopped'; tick: number; collectionId: CollectionId }
   | { type: 'transmission-completed'; tick: number; collectionId: CollectionId }
   | { type: 'undersupply-changed'; tick: number; ratio: number }
+  | { type: 'protocol-fired'; tick: number; ruleId: string; action: ProtocolAction }
   | { type: 'action-rejected'; tick: number; reason: ActionRejection }
   | { type: 'run-ended'; tick: number; reason: EndReason };
 

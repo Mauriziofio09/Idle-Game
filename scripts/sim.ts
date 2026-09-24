@@ -14,6 +14,7 @@ import { TARGETS } from '../src/app/engine/balance';
 import { COLLECTION_IDS, SYSTEM_IDS, createInitialState, savedShare, type GameState } from '../src/app/engine/state';
 import { step } from '../src/app/engine/step';
 import { stateToSeed } from '../src/app/engine/rng';
+import type { ProtocolRule } from '../src/app/engine/protocol-types';
 
 /** Pillar 1: every strategy has to end. The ceiling lives in balance.ts with the other targets. */
 const MAX_TICKS = TARGETS.maxRunTicks;
@@ -21,6 +22,8 @@ const SEED_COUNT = Number(process.env.SIM_SEEDS ?? 200);
 
 interface Strategy {
   readonly name: string;
+  /** Prepares the archive before the first tick, e.g. by writing protocols. */
+  setup?(state: GameState): GameState;
   /** Returns the action to take this tick, or null to sit still. */
   decide(state: GameState): Action | null;
 }
@@ -71,6 +74,41 @@ const abandonCellar: Strategy = {
   },
 };
 
+function rule(
+  id: string,
+  condition: ProtocolRule['condition'],
+  action: ProtocolRule['action'],
+): ProtocolRule {
+  return { id, condition, action, enabled: true, firedCount: 0 };
+}
+
+/**
+ * The idle heart: the player writes two protocols and then walks away. Everything
+ * after tick 0 is the custodian depot's doing, which is exactly what has to carry an
+ * absence. Milestone 8 tunes against this.
+ */
+const protocolsOnly: Strategy = {
+  name: 'Protokolle, dann weggehen',
+  setup: (state) => ({
+    ...state,
+    // Only two slots at the start of a run, so these have to be the two that matter:
+    // shed load to get the battery charging again, then keep the pumps alive.
+    protocols: [
+      rule(
+        'p1',
+        { kind: 'energy-below', value: 40 },
+        { type: 'toggle', systemId: 'climate', on: false },
+      ),
+      rule(
+        'p2',
+        { kind: 'system-integrity-below', systemId: 'pumps', value: 45 },
+        { type: 'repair', systemId: 'pumps' },
+      ),
+    ],
+  }),
+  decide: () => null,
+};
+
 interface RunResult {
   seed: string;
   ticks: number;
@@ -78,10 +116,15 @@ interface RunResult {
   endReason: string;
   lostSystems: number;
   lostCollections: number;
+  /** How many actions the custodian depot took on its own. */
+  protocolRuns: number;
 }
 
 function playRun(seed: string, strategy: Strategy): RunResult {
   let state = createInitialState(seed);
+  if (strategy.setup) {
+    state = strategy.setup(state);
+  }
 
   while (!state.ended && state.tick < MAX_TICKS) {
     const action = strategy.decide(state);
@@ -100,6 +143,11 @@ function playRun(seed: string, strategy: Strategy): RunResult {
     if (state.collections[id].lost) lostCollections++;
   }
 
+  let protocolRuns = 0;
+  for (const rule of state.protocols) {
+    protocolRuns += rule.firedCount;
+  }
+
   return {
     seed,
     ticks: state.tick,
@@ -107,6 +155,7 @@ function playRun(seed: string, strategy: Strategy): RunResult {
     endReason: state.endReason ?? 'LÄUFT NOCH',
     lostSystems,
     lostCollections,
+    protocolRuns,
   };
 }
 
@@ -149,6 +198,11 @@ function summarise(strategy: Strategy, results: RunResult[]): void {
       `   P90 ${(percentile(saved, 0.9) * 100).toFixed(1).padStart(7)} %`,
   );
   console.log(`  Ende       ${reasonText}`);
+  const runs = results.map((r) => r.protocolRuns).sort((a, b) => a - b);
+  console.log(
+    `  Protokolle Median ${percentile(runs, 0.5)} Aktionen durch das Depot` +
+      ` (P90 ${percentile(runs, 0.9)})`,
+  );
   if (unfinished > 0) {
     console.log(`  ⚠ ${unfinished} von ${results.length} Runs liefen über 72 h — Säule 1 verletzt.`);
   }
@@ -184,7 +238,7 @@ function measureThroughput(): void {
 }
 
 function main(): void {
-  const strategies = [doNothing, repairWeakest, abandonCellar];
+  const strategies = [doNothing, repairWeakest, abandonCellar, protocolsOnly];
   const seeds = Array.from({ length: SEED_COUNT }, (_, i) => stateToSeed(i * 2654435761));
 
   console.log(`ENTROPIE · Headless-Simulation über ${seeds.length} Seeds`);

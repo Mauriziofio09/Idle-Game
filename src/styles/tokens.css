@@ -96,6 +96,10 @@
   --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
   /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
   --stat-column-min: 96px;
+  /* DERIVED 15 — a number field wide enough for four digits plus a unit. */
+  --field-number-width: 5.5em;
+  /* DERIVED 16 — the checkbox square, one step of the scale. */
+  --checkbox-size: var(--space-4);
   /* DERIVED 12 — cross-section dimensions. styles.md sizes cards, not a building, so these
      are built from the spacing scale: see PLAN.md "Ableitungen aus styles.md". */
   --floor-min-height: 76px;

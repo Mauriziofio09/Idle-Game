@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
 import {
   COLLECTION_NAMES,
@@ -8,6 +8,7 @@ import {
 } from '../../content/de';
 import { METRES_PER_FLOOR, OFFLINE } from '../../engine/balance';
 import type { AwayReport } from '../../game/away-report';
+import { GameStore } from '../../game/game-store';
 import { formatDuration, formatInteger, formatMetres } from '../../format';
 import { Button } from '../kit/button';
 
@@ -24,6 +25,8 @@ import { Button } from '../kit/button';
   styleUrl: './return-summary.css',
 })
 export class ReturnSummary {
+  private readonly store = inject(GameStore);
+
   readonly report = input.required<AwayReport>();
   readonly dismissed = output<void>();
 
@@ -59,6 +62,22 @@ export class ReturnSummary {
       ...report.lostSystems.map((id) => SYSTEM_NAMES[id]),
       ...report.lostCollections.map((id) => COLLECTION_NAMES[id]),
     ];
+  });
+
+  /**
+   * What the protocols did. Rules are named by their position, which is what the
+   * editor shows too — an id would mean nothing to the player.
+   */
+  protected readonly protocolRuns = computed(() => {
+    const runs = this.report().protocolRuns;
+    const rules = this.store.protocols();
+    return Object.entries(runs)
+      .map(([id, count]) => ({ position: rules.findIndex((rule) => rule.id === id) + 1, count }))
+      .filter((entry) => entry.position > 0)
+      .sort((a, b) => a.position - b.position)
+      .map((entry) =>
+        RETURN_LABELS.protocolRun(formatInteger(entry.position), formatInteger(entry.count)),
+      );
   });
 
   protected readonly floodedNote = computed(() => {

@@ -87,6 +87,39 @@ describe('determinism', () => {
     expect(play()).toEqual(play());
   });
 
+  it('holds with protocols in the state, which is where offline play lives', () => {
+    // Every other case here starts from createInitialState, whose rule list is empty —
+    // so the guarantee was never exercised with the depot acting.
+    const base = createInitialState('4F2A');
+    const start: GameState = {
+      ...base,
+      material: 5000,
+      energy: 150,
+      // A healthy generator, so the depot can actually afford to act: the binding
+      // constraint at the current balance is energy, not the cooldown.
+      systems: {
+        ...base.systems,
+        generator: { ...base.systems.generator, integrity: 100 },
+        climate: { ...base.systems.climate, on: false },
+      },
+      protocols: [
+        {
+          id: 'r1',
+          condition: { kind: 'system-integrity-below', systemId: 'pumps', value: 80 },
+          action: { type: 'repair', systemId: 'pumps' },
+          enabled: true,
+          firedCount: 0,
+        },
+      ],
+    };
+
+    const straight = runStraight(start, 2000);
+    expect(straight.protocols[0].firedCount).toBeGreaterThan(3);
+
+    expect(runInRandomChunks(start, 2000, 4711)).toEqual(straight);
+    expect(simulateInChunks(start, 2000).state).toEqual(straight);
+  });
+
   it('gives different archives for different seeds', () => {
     const a = createInitialState('4F2A');
     const b = createInitialState('9B01');

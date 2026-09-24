@@ -28,6 +28,9 @@ import {
 } from '../engine/state';
 import { decayMultiplier, demand, production } from '../engine/step';
 import { buildAwayReport, type AwayReport } from './away-report';
+import type { ProtocolCondition, ProtocolRule } from '../engine/protocol-types';
+import { cooldownSeconds, depotIsWorking } from '../engine/protocols';
+import { PROTOCOLS } from '../engine/balance';
 import { describe, type LogEntry } from './log';
 import { SaveService } from './save';
 
@@ -239,6 +242,78 @@ export class GameStore {
 
   floorIsFlooded(floor: number): boolean {
     return isFlooded(this._state(), floor);
+  }
+
+  /* ------------------------------------------------------------- protocols */
+
+  readonly protocols = computed(() => this._state().protocols);
+  readonly protocolSlots = computed(() => this._state().protocolSlots);
+  readonly materialReserve = computed(() => this._state().materialReserve);
+  readonly canAddProtocol = computed(
+    () => this._state().protocols.length < this._state().protocolSlots,
+  );
+  /** True while the depot is able to run protocols at all. */
+  readonly depotWorking = computed(() => depotIsWorking(this._state()));
+  readonly depotCooldownSeconds = computed(() => cooldownSeconds(this._state()));
+
+  /**
+   * Builds and appends a rule in one step. The id is derived from the rules already in
+   * the state, so creating and adding must not be separable — two rules built before
+   * either is added would otherwise be handed the same id.
+   */
+  addProtocol(condition: ProtocolCondition, action: ProtocolRule['action']): ProtocolRule | null {
+    if (!this.canAddProtocol()) {
+      return null;
+    }
+    const rule = this.buildRule(condition, action);
+    this._state.update((state) => ({ ...state, protocols: [...state.protocols, rule] }));
+    return rule;
+  }
+
+  removeProtocol(id: string): void {
+    this._state.update((state) => ({
+      ...state,
+      protocols: state.protocols.filter((rule) => rule.id !== id),
+    }));
+  }
+
+  updateProtocol(id: string, change: Partial<Omit<ProtocolRule, 'id'>>): void {
+    this._state.update((state) => ({
+      ...state,
+      protocols: state.protocols.map((rule) => (rule.id === id ? { ...rule, ...change } : rule)),
+    }));
+  }
+
+  /** Moves a rule in the priority order. The first match that is affordable wins. */
+  moveProtocol(id: string, direction: -1 | 1): void {
+    this._state.update((state) => {
+      const rules = [...state.protocols];
+      const from = rules.findIndex((rule) => rule.id === id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= rules.length) {
+        return state;
+      }
+      [rules[from], rules[to]] = [rules[to], rules[from]];
+      return { ...state, protocols: rules };
+    });
+  }
+
+  setMaterialReserve(value: number): void {
+    const clamped = Math.max(0, Math.min(PROTOCOLS.maxMaterialReserve, Math.round(value)));
+    this._state.update((state) => ({ ...state, materialReserve: clamped }));
+  }
+
+  /**
+   * An id no existing rule holds. Derived from the current rules rather than a counter,
+   * so ids restored from a save can never be handed out twice.
+   */
+  private buildRule(condition: ProtocolCondition, action: ProtocolRule['action']): ProtocolRule {
+    const used = new Set(this._state().protocols.map((rule) => rule.id));
+    let index = 1;
+    while (used.has(`r${index}`)) {
+      index++;
+    }
+    return { id: `r${index}`, condition, action, enabled: true, firedCount: 0 };
   }
 
   entropyPerRepair(): number {

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOG } from '../content/de';
-import { OFFLINE } from '../engine/balance';
+import { OFFLINE, PROTOCOLS } from '../engine/balance';
 import { simulate } from '../engine/offline';
 import { createInitialState } from '../engine/state';
 import { SaveService } from './save';
@@ -291,6 +291,96 @@ describe('GameStore', () => {
       // two days in which "nothing was lost".
       expect(report?.simulatedSeconds).toBe(0);
       expect(report?.endedWhileAway).toBe(false);
+    });
+  });
+
+  describe('protocol rules', () => {
+    const condition = { kind: 'material-above', value: 10 } as const;
+    const action = { type: 'repair', systemId: 'pumps' } as const;
+
+    it('refuses a rule beyond the slots the archive has', () => {
+      expect(store.protocolSlots()).toBe(PROTOCOLS.startingSlots);
+
+      for (let i = 0; i < PROTOCOLS.startingSlots; i++) {
+        expect(store.addProtocol(condition, action)).not.toBeNull();
+      }
+      expect(store.canAddProtocol()).toBe(false);
+      expect(store.addProtocol(condition, action)).toBeNull();
+      expect(store.protocols().length).toBe(PROTOCOLS.startingSlots);
+    });
+
+    it('never hands two live rules the same id', () => {
+      const first = store.addProtocol(condition, action)!;
+      const second = store.addProtocol(condition, action)!;
+      expect(second.id).not.toBe(first.id);
+
+      store.removeProtocol(first.id);
+      // The freed id may be reused; a collision with a live rule must not happen.
+      const third = store.addProtocol(condition, action)!;
+      expect(third.id).not.toBe(second.id);
+      expect(new Set(store.protocols().map((rule) => rule.id)).size).toBe(
+        store.protocols().length,
+      );
+    });
+
+    it('carries the counter with the rule when the order changes', () => {
+      const first = store.addProtocol(condition, action)!;
+      const second = store.addProtocol({ kind: 'energy-above', value: 5 }, action)!;
+      store.updateProtocol(second.id, { firedCount: 12 });
+
+      store.moveProtocol(second.id, -1);
+
+      const rules = store.protocols();
+      expect(rules[0].id).toBe(second.id);
+      expect(rules[0].firedCount).toBe(12);
+      expect(rules[1].id).toBe(first.id);
+      expect(rules[1].firedCount).toBe(0);
+    });
+
+    it('ignores a move that would fall off either end', () => {
+      const only = store.addProtocol(condition, action)!;
+      store.moveProtocol(only.id, -1);
+      store.moveProtocol(only.id, 1);
+      expect(store.protocols().map((rule) => rule.id)).toEqual([only.id]);
+    });
+
+    it('keeps the counter across an edit', () => {
+      const rule = store.addProtocol(condition, action)!;
+      store.updateProtocol(rule.id, { firedCount: 5 });
+      store.updateProtocol(rule.id, { condition: { kind: 'energy-below', value: 20 } });
+
+      expect(store.protocols()[0].firedCount).toBe(5);
+      expect(store.protocols()[0].condition).toEqual({ kind: 'energy-below', value: 20 });
+    });
+
+    it('clamps the material reserve into its range', () => {
+      store.setMaterialReserve(-50);
+      expect(store.materialReserve()).toBe(0);
+
+      store.setMaterialReserve(10_000);
+      expect(store.materialReserve()).toBe(PROTOCOLS.maxMaterialReserve);
+
+      store.setMaterialReserve(30.7);
+      expect(store.materialReserve()).toBe(31);
+    });
+
+    it('keeps rules and reserve across a save and reload', () => {
+      const rule = store.addProtocol(condition, action)!;
+      store.updateProtocol(rule.id, { firedCount: 3, enabled: false });
+      store.setMaterialReserve(25);
+      store.persist();
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+      reloaded.initialize(1_700_000_000_000);
+
+      expect(reloaded.materialReserve()).toBe(25);
+      expect(reloaded.protocols()).toEqual([
+        { id: rule.id, condition, action, enabled: false, firedCount: 3 },
+      ]);
     });
   });
 });

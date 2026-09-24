@@ -8,6 +8,7 @@ import {
   STARTUP_NOTICES,
   STARTUP_NOTICE_DISMISS,
 } from './content/de';
+import { PROTOCOL_LABELS } from './content/de';
 import { OFFLINE } from './engine/balance';
 import { AutoSave } from './game/autosave';
 import type { AwayReport } from './game/away-report';
@@ -19,6 +20,7 @@ import { CrossSection } from './ui/cross-section/cross-section';
 import { DetailPanel } from './ui/detail-panel/detail-panel';
 import { ResourceBar } from './ui/resource-bar/resource-bar';
 import { ReturnSummary } from './ui/return-summary/return-summary';
+import { Protocols } from './ui/protocols/protocols';
 import { Settings } from './ui/settings/settings';
 import { Card } from './ui/kit/card';
 import { Icon } from './ui/kit/icon';
@@ -34,6 +36,7 @@ import { IconBox } from './ui/kit/icon-box';
     DetailPanel,
     Icon,
     IconBox,
+    Protocols,
     ResourceBar,
     ReturnSummary,
     Settings,
@@ -51,6 +54,7 @@ export class App implements OnInit {
   protected readonly endLabels = END_LABELS;
   protected readonly settingsLabels = SETTINGS_LABELS;
   protected readonly noticeDismiss = STARTUP_NOTICE_DISMISS;
+  protected readonly protocolLabels = PROTOCOL_LABELS;
 
   /** Set when the player was away long enough to deserve an account of it. */
   protected readonly awayReport = signal<AwayReport | null>(null);

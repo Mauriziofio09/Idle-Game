@@ -164,6 +164,10 @@ export const RETURN_LABELS = {
   flooded: 'Überflutet',
   dismiss: 'Weiter',
   endedWhileAway: 'Das Archiv verstummte, während du fort warst.',
+  protocols: 'Protokolle',
+  noProtocols: 'Kein Protokoll lief.',
+  /** One entry per rule that fired, e.g. "Regel 1: 8×". */
+  protocolRun: (position: string, count: string) => `Regel ${position}: ${count}×`,
   /** Shown when the absence exceeded the offline window. */
   stasis: (hours: string) =>
     `Länger als ${hours} fort. Das Archiv ging in Notfall-Stasis — darüber hinaus ist nichts weiter verfallen.`,
@@ -217,4 +221,65 @@ export const LOG_SESSION = {
   resumed: 'Das Archiv erinnert sich.',
   stasis: 'Notfall-Stasis beendet. Der Verfall läuft weiter.',
   newArchive: 'Ein neues Archiv. Die Zählung beginnt von vorn.',
+} as const;
+
+/** The protocol editor. Rules read as German sentences, not as configuration. */
+export const PROTOCOL_LABELS = {
+  title: 'Protokolle',
+  intro:
+    'KUSTOS führt diese Regeln aus, wenn du nicht da bist — die oberste passende zuerst.',
+  ifWord: 'Wenn',
+  thenWord: 'dann',
+  add: 'Regel hinzufügen',
+  remove: 'Entfernen',
+  moveUp: 'Höher',
+  moveDown: 'Tiefer',
+  /** Accessible names carry the rule's position, or every row sounds identical. */
+  ruleName: (position: string) => `Regel ${position}`,
+  moveUpFor: (position: string) => `Regel ${position} höher`,
+  moveDownFor: (position: string) => `Regel ${position} tiefer`,
+  removeFor: (position: string) => `Regel ${position} entfernen`,
+  enabledFor: (position: string) => `Regel ${position} aktiv`,
+  conditionFor: (position: string) => `Regel ${position}: Bedingung`,
+  conditionTargetFor: (position: string) => `Regel ${position}: Bezug`,
+  thresholdFor: (position: string, unit: string) =>
+    unit ? `Regel ${position}: Schwelle in ${unit}` : `Regel ${position}: Schwelle`,
+  actionFor: (position: string) => `Regel ${position}: Aktion`,
+  actionTargetFor: (position: string) => `Regel ${position}: System`,
+  enabled: 'Aktiv',
+  empty: 'Noch keine Regel. KUSTOS wartet auf Anweisungen.',
+  condition: 'Bedingung',
+  conditionTarget: 'Bezug',
+  threshold: 'Schwelle',
+  action: 'Aktion',
+  actionTarget: 'System',
+  fired: (count: string) => `in diesem Run ${count}× ausgelöst`,
+  slots: (used: string, total: string) => `${used} von ${total} Slots belegt`,
+  reserve: 'Materialreserve',
+  reserveHint: 'Protokolle geben Material nie unter diesen Wert aus.',
+  depotOff:
+    'Das Kustoden-Depot läuft nicht. Ohne Depot führt niemand Protokolle aus.',
+  depotRate: (seconds: string) => `Eine Aktion alle ${seconds}.`,
+} as const;
+
+export const CONDITION_LABELS = {
+  'system-integrity-below': 'System unter',
+  'water-above': 'Pegel über',
+  'energy-below': 'Energie unter',
+  'energy-above': 'Energie über',
+  'humidity-above': 'Feuchte über',
+  'collection-below': 'Sammlung unter',
+  'material-above': 'Material über',
+} as const;
+
+export const PROTOCOL_ACTION_LABELS = {
+  repair: 'reparieren',
+  'toggle-on': 'einschalten',
+  'toggle-off': 'ausschalten',
+} as const;
+
+export const CONDITION_UNITS = {
+  percent: '%',
+  metres: 'm',
+  amount: '',
 } as const;

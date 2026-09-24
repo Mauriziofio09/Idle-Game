@@ -19,7 +19,7 @@ import {
 import { createCursor, nextRange, seedToState } from './rng';
 import type { ProtocolRule } from './protocol-types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SYSTEM_IDS = [
   'generator',
@@ -95,7 +95,9 @@ export interface GameState {
 
   protocols: ProtocolRule[];
   protocolSlots: number;
-  /** Ticks remaining before the custodian depot may act again. */
+  /** Protocols leave this much material untouched. Player actions ignore it. */
+  materialReserve: number;
+  /** Seconds remaining before the custodian depot may act again. */
   custodianCooldown: number;
 
   ended: boolean;
@@ -156,6 +158,7 @@ export function createInitialState(seed: string): GameState {
     supplyRatio: 1,
     protocols: [],
     protocolSlots: PROTOCOLS.startingSlots,
+    materialReserve: PROTOCOLS.defaultMaterialReserve,
     custodianCooldown: 0,
     ended: false,
     endReason: null,

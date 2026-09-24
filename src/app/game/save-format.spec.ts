@@ -217,6 +217,34 @@ describe('migration', () => {
     expect(result.file.state.seed).toBe('4F2A');
   });
 
+  it('lifts a version 1 save by giving it a material reserve', () => {
+    const v1 = JSON.parse(JSON.stringify(createInitialState('4F2A')));
+    delete v1.materialReserve;
+    v1.schemaVersion = 1;
+
+    const result = parseSaveFile(JSON.stringify({ schemaVersion: 1, savedAt: 1, state: v1 }));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.state.materialReserve).toBe(PROTOCOLS.defaultMaterialReserve);
+    expect(result.file.state.seed).toBe('4F2A');
+  });
+
+  it('carries a version 0 save all the way up, one step at a time', () => {
+    const v0 = JSON.parse(JSON.stringify(createInitialState('9B01')));
+    for (const field of ['supplyRatio', 'protocols', 'protocolSlots', 'custodianCooldown', 'materialReserve']) {
+      delete v0[field];
+    }
+    v0.schemaVersion = 0;
+
+    const result = parseSaveFile(JSON.stringify({ schemaVersion: 0, savedAt: 1, state: v0 }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(result.file.state.supplyRatio).toBe(1);
+    expect(result.file.state.materialReserve).toBe(PROTOCOLS.defaultMaterialReserve);
+  });
+
   it('leaves a current save alone', () => {
     const state = createInitialState('9B01');
     const result = parseSaveFile(JSON.stringify(fileFor(state)));
@@ -228,5 +256,77 @@ describe('migration', () => {
 
   it('keeps the engine and the save format on the same version', () => {
     expect(CURRENT_SCHEMA_VERSION).toBe(SCHEMA_VERSION);
+  });
+
+});
+
+describe('protocol rules in a save', () => {
+  const withRules = (): ReturnType<typeof createInitialState> => {
+    const state = createInitialState('4F2A');
+    state.protocols = [
+      {
+        id: 'r1',
+        condition: { kind: 'system-integrity-below', systemId: 'pumps', value: 40 },
+        action: { type: 'repair', systemId: 'pumps' },
+        enabled: true,
+        firedCount: 7,
+      },
+      {
+        id: 'r2',
+        condition: { kind: 'humidity-above', floor: 2, value: 70 },
+        action: { type: 'toggle', systemId: 'climate', on: true },
+        enabled: false,
+        firedCount: 0,
+      },
+    ];
+    state.materialReserve = 25;
+    return state;
+  };
+
+  it('survives a round trip with their order, counters and reserve', () => {
+    const state = withRules();
+    const result = decodeExport(encodeExport(fileFor(state)));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.file.state.protocols).toEqual(state.protocols);
+    expect(result.file.state.materialReserve).toBe(25);
+  });
+
+  it('refuses rules that were tampered with', () => {
+    const cases: unknown[] = [
+      [{ id: 'r1' }],
+      [{ id: '', condition: { kind: 'material-above', value: 1 }, action: { type: 'repair', systemId: 'pumps' }, enabled: true, firedCount: 0 }],
+      [{ id: 'r1', condition: { kind: 'nope', value: 1 }, action: { type: 'repair', systemId: 'pumps' }, enabled: true, firedCount: 0 }],
+      [{ id: 'r1', condition: { kind: 'material-above', value: 1 }, action: { type: 'dismantle', systemId: 'pumps' }, enabled: true, firedCount: 0 }],
+      [{ id: 'r1', condition: { kind: 'material-above', value: 1 }, action: { type: 'repair', systemId: 'ghost' }, enabled: true, firedCount: 0 }],
+      [{ id: 'r1', condition: { kind: 'humidity-above', floor: 9, value: 1 }, action: { type: 'repair', systemId: 'pumps' }, enabled: true, firedCount: 0 }],
+      [{ id: 'r1', condition: { kind: 'material-above', value: Number.NaN }, action: { type: 'repair', systemId: 'pumps' }, enabled: true, firedCount: 0 }],
+    ];
+    for (const protocols of cases) {
+      const broken = { ...JSON.parse(JSON.stringify(createInitialState('4F2A'))), protocols };
+      expect(validateState(broken)).toBeNull();
+    }
+  });
+
+  it('refuses duplicate rule ids and more rules than there are slots', () => {
+    const duplicate = {
+      id: 'r1',
+      condition: { kind: 'material-above', value: 1 },
+      action: { type: 'repair', systemId: 'pumps' },
+      enabled: true,
+      firedCount: 0,
+    };
+    const base = JSON.parse(JSON.stringify(createInitialState('4F2A')));
+    expect(validateState({ ...base, protocols: [duplicate, { ...duplicate }] })).toBeNull();
+
+    const tooMany = Array.from({ length: 9 }, (_, i) => ({ ...duplicate, id: `r${i}` }));
+    expect(validateState({ ...base, protocols: tooMany })).toBeNull();
+  });
+
+  it('refuses a reserve outside its range', () => {
+    const base = JSON.parse(JSON.stringify(createInitialState('4F2A')));
+    expect(validateState({ ...base, materialReserve: -1 })).toBeNull();
+    expect(validateState({ ...base, materialReserve: 10_000 })).toBeNull();
   });
 });

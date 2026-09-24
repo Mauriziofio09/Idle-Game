@@ -131,6 +131,9 @@ export const CUSTODIAN = {
 export const PROTOCOLS = {
   startingSlots: 2,
   maxSlots: 8,
+  /** Protocols never spend material below this; the player keeps a reserve in hand. */
+  defaultMaterialReserve: 0,
+  maxMaterialReserve: 200,
 } as const;
 
 export const EVENTS = {

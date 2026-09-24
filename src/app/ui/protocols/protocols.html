@@ -1,0 +1,186 @@
+<p class="intro">{{ labels.intro }}</p>
+
+@if (!depotWorking()) {
+  <p class="warning">{{ labels.depotOff }}</p>
+} @else if (depotRate(); as rate) {
+  <p class="intro">{{ rate }}</p>
+}
+
+@if (rules().length === 0) {
+  <p class="intro">{{ labels.empty }}</p>
+}
+
+<ol class="rules">
+  @for (view of rules(); track view.rule.id) {
+    <li #ruleItem class="rule" [class.disabled]="!view.rule.enabled" [attr.aria-label]="view.name">
+      <div class="sentence">
+        <span class="word">{{ labels.ifWord }}</span>
+
+        <span class="select">
+          <select
+            class="field"
+            [attr.aria-label]="view.conditionLabel"
+            [value]="view.kind"
+            (change)="setConditionKind(view.rule, $any($event.target).value)"
+          >
+            @for (kind of conditionKinds; track kind) {
+              <option [value]="kind" [selected]="kind === view.kind">
+                {{ conditionLabels[kind] }}
+              </option>
+            }
+          </select>
+        </span>
+
+        @if (view.targetKind === 'system') {
+          <span class="select">
+            <select
+              class="field"
+              [attr.aria-label]="view.conditionTargetLabel"
+              (change)="setConditionSystem(view.rule, $any($event.target).value)"
+            >
+              @for (system of systems; track system.id) {
+                <option [value]="system.id" [selected]="system.id === view.systemTarget">
+                  {{ system.name }}
+                </option>
+              }
+            </select>
+          </span>
+        } @else if (view.targetKind === 'collection') {
+          <span class="select">
+            <select
+              class="field"
+              [attr.aria-label]="view.conditionTargetLabel"
+              (change)="setConditionCollection(view.rule, $any($event.target).value)"
+            >
+              @for (collection of collections; track collection.id) {
+                <option [value]="collection.id" [selected]="collection.id === view.collectionTarget">
+                  {{ collection.name }}
+                </option>
+              }
+            </select>
+          </span>
+        } @else if (view.targetKind === 'floor') {
+          <span class="select">
+            <select
+              class="field"
+              [attr.aria-label]="view.conditionTargetLabel"
+              (change)="setConditionFloor(view.rule, +$any($event.target).value)"
+            >
+              @for (floor of floors; track floor.index) {
+                <option [value]="floor.index" [selected]="floor.index === view.floorTarget">
+                  {{ floor.name }}
+                </option>
+              }
+            </select>
+          </span>
+        }
+
+        <input
+          class="field number"
+          type="number"
+          min="0"
+          step="1"
+          [attr.aria-label]="view.thresholdLabel"
+          [value]="view.threshold"
+          (change)="setThreshold(view.rule, $any($event.target))"
+        />
+        @if (view.unit) {
+          <span class="word">{{ view.unit }}</span>
+        }
+
+        <span class="word">{{ labels.thenWord }}</span>
+
+        <span class="select">
+          <select
+            class="field"
+            [attr.aria-label]="view.actionTargetLabel"
+            (change)="setActionSystem(view.rule, $any($event.target).value)"
+          >
+            @for (system of systems; track system.id) {
+              <option [value]="system.id" [selected]="system.id === view.actionSystem">
+                {{ system.name }}
+              </option>
+            }
+          </select>
+        </span>
+
+        <span class="select">
+          <select
+            class="field"
+            [attr.aria-label]="view.actionLabel"
+            (change)="setAction(view.rule, $any($event.target).value)"
+          >
+            @for (choice of actionChoices; track choice) {
+              <option [value]="choice" [selected]="choice === view.actionChoice">
+                {{ actionLabels[choice] }}
+              </option>
+            }
+          </select>
+        </span>
+      </div>
+
+      <div class="row">
+        <span class="fired">{{ view.firedLabel }}</span>
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [attr.aria-label]="view.enabledLabel"
+            [checked]="view.rule.enabled"
+            (change)="setEnabled(view.rule.id, $any($event.target).checked)"
+          />
+          {{ labels.enabled }}
+        </label>
+
+        <button
+          type="button"
+          class="small"
+          [disabled]="view.first"
+          [attr.aria-label]="view.moveUpLabel"
+          (click)="move(view.rule.id, -1, $any($event.target))"
+        >
+          {{ labels.moveUp }}
+        </button>
+        <button
+          type="button"
+          class="small"
+          [disabled]="view.last"
+          [attr.aria-label]="view.moveDownLabel"
+          (click)="move(view.rule.id, 1, $any($event.target))"
+        >
+          {{ labels.moveDown }}
+        </button>
+        <button
+          type="button"
+          class="small"
+          [attr.aria-label]="view.removeLabel"
+          (click)="remove(view.rule.id)"
+        >
+          {{ labels.remove }}
+        </button>
+      </div>
+    </li>
+  }
+</ol>
+
+<div class="footer">
+  <button #addButton type="button" class="small" [disabled]="!canAdd()" (click)="add()">
+    {{ labels.add }}
+  </button>
+  <span class="fired">{{ slotsLabel() }}</span>
+</div>
+
+<div class="reserve">
+  <label class="fired" for="material-reserve">{{ labels.reserve }}</label>
+  <input
+    id="material-reserve"
+    class="field number"
+    type="number"
+    min="0"
+    [attr.max]="maxReserve"
+    step="1"
+    [value]="reserve()"
+    (change)="setReserve($any($event.target))"
+  />
+  <p class="intro">{{ labels.reserveHint }}</p>
+</div>

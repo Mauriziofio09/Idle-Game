@@ -7,6 +7,13 @@
 import type { Action } from './actions';
 import type { CollectionId, SystemId } from './state';
 
+/**
+ * What a protocol may do. Deliberately narrower than Action: prompt.md section 5.9
+ * lists repair, on/off, transmit and relocate — never a dismantle. Giving away a
+ * system for good stays a decision the player makes in person.
+ */
+export type ProtocolAction = Extract<Action, { type: 'repair' } | { type: 'toggle' }>;
+
 export type ProtocolCondition =
   | { kind: 'system-integrity-below'; systemId: SystemId; value: number }
   | { kind: 'water-above'; value: number }
@@ -19,7 +26,7 @@ export type ProtocolCondition =
 export interface ProtocolRule {
   id: string;
   condition: ProtocolCondition;
-  action: Action;
+  action: ProtocolAction;
   enabled: boolean;
   /** How often this rule fired during the current run. Shown next to the rule. */
   firedCount: number;

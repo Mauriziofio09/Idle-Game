@@ -15,6 +15,10 @@
   <p class="line">{{ labels.flooded }}: {{ flooded }}</p>
 }
 
+@if (protocolRuns().length > 0) {
+  <p class="line">{{ labels.protocols }}: {{ protocolRuns().join(' · ') }}</p>
+}
+
 @if (losses().length > 0) {
   <p class="line loss">{{ labels.lost }}: {{ losses().join(' · ') }}</p>
 } @else {

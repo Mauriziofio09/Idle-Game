@@ -63,6 +63,11 @@ export function formatResource(value: number): string {
   return resource.format(value);
 }
 
+/** A span of seconds as an interval, e.g. "25 s". Not the run clock, which is hh:mm:ss. */
+export function formatSeconds(value: number): string {
+  return `${resource.format(value)} s`;
+}
+
 /** A per-second consumption or output, e.g. "1,2 /s". */
 export function formatPerSecond(value: number): string {
   return `${resource.format(value)} /s`;
