@@ -1,13 +1,24 @@
 import { TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOG } from '../content/de';
+import { OFFLINE } from '../engine/balance';
+import { simulate } from '../engine/offline';
+import { createInitialState } from '../engine/state';
+import { SaveService } from './save';
+import { GAME_STORAGE, memoryStorage, type KeyValueStorage } from './storage';
 import { GameStore } from './game-store';
 
 describe('GameStore', () => {
   let store: GameStore;
 
+  let storage: KeyValueStorage;
+
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    storage = memoryStorage();
+    TestBed.configureTestingModule({
+      providers: [{ provide: GAME_STORAGE, useValue: storage }],
+    });
     store = TestBed.inject(GameStore);
   });
 
@@ -99,5 +110,187 @@ describe('GameStore', () => {
   it('keeps the log bounded during a long catch-up', () => {
     store.advance(24 * 60 * 60);
     expect(store.log().length).toBeLessThanOrEqual(120);
+  });
+
+  describe('starting up', () => {
+    const NOW = 1_700_000_000_000;
+
+    function storeSave(state = createInitialState('4F2A'), savedAt = NOW): void {
+      TestBed.inject(SaveService).write(state, savedAt);
+    }
+
+    it('starts a fresh archive when there is nothing saved', () => {
+      expect(store.initialize(NOW)).toBeNull();
+      expect(store.state().tick).toBe(0);
+    });
+
+    it('restores a saved archive and simulates the time away', () => {
+      const saved = simulate(createInitialState('4F2A'), 300).state;
+      storeSave(saved);
+
+      // A fresh store, as after a reload.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const report = reloaded.initialize(NOW + 120_000);
+      expect(report).not.toBeNull();
+      expect(reloaded.state().seed).toBe('4F2A');
+      expect(reloaded.state().tick).toBe(300 + 120);
+      expect(report?.simulatedSeconds).toBe(120);
+      expect(report?.absentSeconds).toBe(120);
+      expect(report?.stasis).toBe(false);
+    });
+
+    it('catches up through the very same path the live loop uses', () => {
+      const saved = simulate(createInitialState('4F2A'), 60).state;
+      storeSave(saved);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+      reloaded.initialize(NOW + 600_000);
+
+      expect(reloaded.state()).toEqual(simulate(saved, 600).state);
+    });
+
+    it('treats a clock that moved backwards as no time at all', () => {
+      const saved = simulate(createInitialState('4F2A'), 60).state;
+      storeSave(saved, NOW);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const report = reloaded.initialize(NOW - 60 * 60 * 1000);
+      expect(report?.simulatedSeconds).toBe(0);
+      expect(reloaded.state()).toEqual(saved);
+    });
+
+    it('holds the archive still beyond the offline window', () => {
+      const saved = createInitialState('4F2A');
+      storeSave(saved, NOW);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const week = 7 * 24 * 60 * 60 * 1000;
+      const report = reloaded.initialize(NOW + week);
+
+      expect(report?.stasis).toBe(true);
+      expect(report?.absentSeconds).toBe(week / 1000);
+      // The run ends inside the window, so fewer ticks than the cap were simulated —
+      // never more.
+      expect(report?.simulatedSeconds).toBeLessThanOrEqual(OFFLINE.maxHours * 60 * 60);
+      expect(reloaded.state().ended).toBe(true);
+    });
+
+    it('reports what was lost while the player was away', () => {
+      storeSave(createInitialState('4F2A'), NOW);
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const report = reloaded.initialize(NOW + 60 * 60 * 1000);
+      expect(report).not.toBeNull();
+      expect(report?.endedWhileAway).toBe(true);
+      expect(report?.water.after).toBeGreaterThan(report!.water.before);
+      expect(report?.lostSystems.length).toBeGreaterThan(0);
+    });
+
+    it('starts a new archive without touching the legacy', () => {
+      const saves = TestBed.inject(SaveService);
+      saves.writeLegacy({ schemaVersion: 1, sent: { maps: 12 }, runs: 2 });
+      store.advance(120);
+      store.persist();
+
+      const before = store.seed();
+      store.startNewArchive();
+
+      expect(store.state().tick).toBe(0);
+      expect(store.seed()).not.toBe(before);
+      expect(saves.readLegacy()).toMatchObject({ sent: { maps: 12 }, runs: 2 });
+    });
+
+    it('replaces the run on a good import and refuses a bad one', () => {
+      const saves = TestBed.inject(SaveService);
+      const other = simulate(createInitialState('9B01'), 90).state;
+
+      expect(store.importRun(saves.exportRun(other, NOW))).toEqual({ ok: true });
+      expect(store.state().seed).toBe('9B01');
+      expect(store.state().tick).toBe(90);
+
+      const refused = store.importRun('rubbish');
+      expect(refused.ok).toBe(false);
+      // A refused import leaves the running archive exactly where it was.
+      expect(store.state().seed).toBe('9B01');
+    });
+
+    it('tells the player when both slots are unreadable, and keeps the wreckage', () => {
+      storage.setItem('entropie.save', 'rubbish');
+      storage.setItem('entropie.save.backup', 'also rubbish');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      expect(reloaded.initialize(NOW)).toBeNull();
+      expect(reloaded.startupNotice()).toBe('broken');
+      // The unreadable data is set aside rather than buried by the next autosave.
+      expect(storage.getItem('entropie.save.broken')).toBe('rubbish');
+
+      reloaded.dismissStartupNotice();
+      expect(reloaded.startupNotice()).toBeNull();
+    });
+
+    it('says so when it had to fall back to the backup', () => {
+      const first = createInitialState('4F2A');
+      const saves = TestBed.inject(SaveService);
+      saves.write(first, NOW);
+      saves.write(simulate(first, 60).state, NOW);
+      storage.setItem('entropie.save', 'rubbish');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      reloaded.initialize(NOW);
+      expect(reloaded.startupNotice()).toBe('from-backup');
+    });
+
+    it('reports nothing simulated for an archive that was already silent', () => {
+      // Play it to the end, save, and come back two days later.
+      store.advance(24 * 60 * 60);
+      expect(store.state().ended).toBe(true);
+      store.persist();
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const reloaded = TestBed.inject(GameStore);
+
+      const report = reloaded.initialize(NOW + 48 * 60 * 60 * 1000);
+      // The absence is real, but nothing happened in it — the summary must not claim
+      // two days in which "nothing was lost".
+      expect(report?.simulatedSeconds).toBe(0);
+      expect(report?.endedWhileAway).toBe(false);
+    });
   });
 });

@@ -13,6 +13,22 @@
     <app-resource-bar />
   </app-card>
 
+  @if (startupNotice(); as notice) {
+    <app-card class="notice" role="status">
+      <h2>{{ notice.title }}</h2>
+      <p class="summary">{{ notice.text }}</p>
+      <button type="button" class="dismiss" (click)="dismissNotice()">
+        {{ noticeDismiss }}
+      </button>
+    </app-card>
+  }
+
+  @if (awayReport(); as report) {
+    <app-card class="away">
+      <app-return-summary [report]="report" (dismissed)="dismissReport()" />
+    </app-card>
+  }
+
   @if (endReason(); as reason) {
     <app-card class="ending">
       <h2>{{ reason }}</h2>
@@ -34,6 +50,10 @@
 
       <app-card [label]="titles.log">
         <app-archive-log />
+      </app-card>
+
+      <app-card [label]="settingsLabels.title">
+        <app-settings />
       </app-card>
     </div>
   </div>

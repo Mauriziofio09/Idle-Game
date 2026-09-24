@@ -1,0 +1,36 @@
+<h2>{{ labels.title }}</h2>
+
+<dl class="facts">
+  <dt>{{ labels.away }}</dt>
+  <dd>{{ away() }}</dd>
+  <dt>{{ labels.simulated }}</dt>
+  <dd>{{ simulated() }}</dd>
+  <dt>{{ labels.energy }}</dt>
+  <dd>{{ energyNote() }}</dd>
+</dl>
+
+<p class="line">{{ waterNote() }}</p>
+
+@if (floodedNote(); as flooded) {
+  <p class="line">{{ labels.flooded }}: {{ flooded }}</p>
+}
+
+@if (losses().length > 0) {
+  <p class="line loss">{{ labels.lost }}: {{ losses().join(' · ') }}</p>
+} @else {
+  <p class="line">{{ labels.nothingLost }}</p>
+}
+
+@if (report().endedWhileAway) {
+  <p class="line ending">{{ labels.endedWhileAway }}</p>
+}
+
+@if (stasisNote(); as stasis) {
+  <p class="line muted">{{ stasis }}</p>
+}
+
+@if (report().fromBackup) {
+  <p class="line muted">{{ labels.restoredFromBackup }}</p>
+}
+
+<app-button variant="primary" (pressed)="dismissed.emit()">{{ labels.dismiss }}</app-button>

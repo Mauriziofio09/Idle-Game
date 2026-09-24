@@ -1,7 +1,7 @@
 # PLAN.md — ENTROPIE · Das letzte Archiv
 
 Arbeitsplan zu `prompt.md`. Visuelle Quelle: `styles.md` (schreibgeschützt).
-Status: **M0 + M1 + M2 fertig · wartet auf Feedback vor M3.**
+Status: **M0–M3 fertig · wartet auf Feedback vor M4.**
 
 ---
 
@@ -252,13 +252,13 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Screenshots 1440 px / 375 px gegen `styles.md` geprüft
 
 ### M3 · Speichern & Offline
-- [ ] `localStorage` `entropie.save`, `schemaVersion`, 2 Slots
-- [ ] Autosave 15 s + `visibilitychange` + `pagehide`
-- [ ] `offline.ts` in Chunks, Begrenzung `[0, 24 h]`, negative Zeit → 0, Stasis > 24 h
-- [ ] `return-summary` ab 2 min Abwesenheit
-- [ ] Export/Import Base64 + Prüfsumme + strenger Validator (kein `eval`)
-- [ ] Tests: Roundtrip · Migration v0→v1 · kaputter Import · Offline == Online (gleicher Seed)
-- [ ] Performance: 86 400 Ticks < 1,5 s (gemessen, Zahl im Bericht)
+- [x] `localStorage` `entropie.save`, `schemaVersion`, 2 Slots
+- [x] Autosave 15 s + `visibilitychange` + `pagehide`
+- [x] `offline.ts` in Chunks, Begrenzung `[0, 24 h]`, negative Zeit → 0, Stasis > 24 h
+- [x] `return-summary` ab 2 min Abwesenheit
+- [x] Export/Import Base64 + Prüfsumme + strenger Validator (kein `eval`)
+- [x] Tests: Roundtrip · Migration v0→v1 · kaputter Import · Offline == Online (gleicher Seed)
+- [x] Performance: 86 400 Ticks < 1,5 s (gemessen, Zahl im Bericht)
 
 ### M4 · Protokolle
 - [ ] `protocols.ts`: Bedingungen, Aktionen, Priorität, Depot-Abklingzeit `max(5, 20/(I/100))`
@@ -338,6 +338,14 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
     gibt es geschenkt, statt sie im SVG nachzubauen. Das Wasser ist ein absolut positioniertes
     Element mit `height`-Transition, der Regen sind 1px-Striche, deren **Anzahl** die Stärke zeigt
     (keine Animation — damit ist `prefers-reduced-motion` von vornherein erfüllt).
+15. **Speicher hinter einem Injection-Token** (`game/storage.ts`, M3). `localStorage` fehlt in
+    Privatfenstern, bei blockierten Site-Daten — und in dieser Testumgebung: Node 26 stellt ein
+    eigenes, ohne `--localstorage-file` deaktiviertes `localStorage` bereit, und jsdom liefert
+    keines. Ein Token mit `GAME_STORAGE` behandelt die Abwesenheit an einer Stelle und macht
+    Persistenz ohne Browser-Global testbar. `memoryStorage()` dient Tests und blockierten Browsern.
+16. **Log wird nicht gespeichert.** Er ist eine Sitzungsansicht, kein Zustand: Beim Laden steht
+    „Das Archiv erinnert sich.", danach schreiben die aufgeholten Ereignisse selbst die Zeilen.
+    Das hält den Spielstand klein und kann nie mit dem Zustand auseinanderlaufen.
 14. **Etagen-Tabs auf dem Handy erst in M7.** `prompt.md` 7 nennt „Panels als Tabs" für Mobile.
     In M2 gibt es nur zwei Panels (Auswahl, Log); Tabs lohnen sich ab M4, wenn die Protokolle
     dazukommen. Bis dahin scrollt die Seite — bei 375 px ist der Querschnitt 538 px hoch und
@@ -468,3 +476,64 @@ Die Review mit frischem Kontext fand acht echte Punkte. Behoben:
 Zwei schwache Tests verschärft (der Balken-Test prüfte nur, dass Attribute nicht leer sind;
 der Seed-Test behauptete Unterschiedlichkeit, prüfte aber nur das Format) und drei fehlende
 Bereiche ergänzt: `format.spec.ts`, Ende mitten im Aufholen, kritischer Zustand nie nur über Farbe.
+
+---
+
+## 11 · Stand nach M3
+
+Gebaut: `game/save-format.ts` (pure Funktionen: Migration, Validierung, Prüfsumme, Base64),
+`game/save.ts` (zwei Slots, getrenntes Vermächtnis), `game/storage.ts` (Token),
+`game/autosave.ts` (15 s + `visibilitychange` + `pagehide`), `game/away-report.ts`,
+`ui/return-summary`, `ui/settings` (Export, Import, Neues Archiv).
+
+**Im Browser nachgewiesen:** Archiv überlebt den Reload (Seed bleibt) · 10 min Abwesenheit
+werden aufgeholt, Laufzeit 00:00:16 → 00:10:16 · Rückkehr-Zusammenfassung erscheint ab 2 min ·
+endete der Run während der Abwesenheit, zeigt sie „Fort 00:20:00 · Simuliert 00:11:12" und
+nennt den Grund · Konsole ohne Fehler.
+
+**Ein echter Fehler, den erst der Browser-Test zeigte:** Die Sammlungsbilanz driftete durch
+tickweises Aufsummieren auf `rotted = 100.00000000000006`. Mein Validator ließ nur `≤ 100` zu
+und erklärte damit einen völlig gesunden Spielstand für beschädigt — der Zwei-Slot-Fallback
+griff und lud stillschweigend die ältere Sicherung. Behoben an beiden Enden: die Engine
+schließt die Bilanz beim Verlust exakt (`rotted = unitsEach − sent`), und der Validator
+toleriert `1e-6` Drift. Regressionstest prüft jeden Zustand eines kompletten Runs.
+
+### Nachträge aus der M3-Review
+
+Sieben echte Punkte. Behoben:
+
+1. **[schwer] Zeit im Hintergrund-Tab wurde aus dem Spielstand gelöscht.** Ist der Tab
+   versteckt, friert der Loop die Simulation ein — der Autosave-Timer läuft aber weiter
+   (Browser drosseln Hintergrund-Timer, sie stoppen sie nicht) und `pagehide` feuert beim
+   Schließen. Beide schrieben den *eingefrorenen* Zustand mit *aktuellem* Zeitstempel.
+   Tab um 22 Uhr verstecken, um 6 Uhr schließen → acht Stunden nie simuliert und nie
+   erwähnt. Das trifft Säule 3 ins Mark. Der Store führt jetzt `simulatedUntilMs` — den
+   Wandzeit-Moment, dem der Zustand entspricht — und *der* wird gespeichert.
+2. **[schwer] Nach dem Run-Ende blieb die Uhr tot.** Die Frame-Kette stoppt beim Verstummen,
+   `running` blieb aber `true`; „Neues Archiv" und ein erfolgreicher Import setzten einen
+   lebendigen Zustand ein, den niemand mehr tickte. Ein `effect` auf `store.ended()` weckt
+   die Kette, mit einem expliziten `pausedByEnding`-Flag statt einer Heuristik am Frame-Handle.
+3. **[mittel] Ein unlesbarer Spielstand erreichte den Spieler nie.** Beide Slots kaputt hieß:
+   stillschweigend ein neues Archiv, und 15 s später überschrieb der Autosave die Reste.
+   Jetzt gibt es eine Meldung (`STARTUP_NOTICES`), und die unlesbaren Daten werden unter
+   `entropie.save.broken` beiseitegelegt. Auch der Fall „aus der Sicherung geladen" wird
+   jetzt unabhängig von der Abwesenheitsdauer gemeldet.
+4. **[mittel] Das Aufholen lief nicht in Chunks.** `simulateInChunks` war nur im Test
+   verdrahtet. Jetzt in beiden Aufhol-Pfaden. Der Kommentar dort behauptete außerdem, die
+   Funktion gebe zwischen Chunks die Kontrolle ab — das tut sie nicht. Korrigiert, samt
+   Begründung, warum keine Fortschrittsanzeige gebaut wird: 24 h messen ~45 ms.
+5. **[mittel] Der Reset verlor den Tastaturfokus** — derselbe Fehler wie in M2, jetzt mit
+   demselben Mittel behoben (`focusAfterRender` auf Bestätigung bzw. Ausgangsbutton).
+6. **[gering] Die Export-Meldung wurde nicht angekündigt** (`role="status"` fehlte), und der
+   Fokus sprang nicht in das erscheinende Textfeld — das ist der einzige Weg, von Hand zu
+   kopieren, wenn die Zwischenablage verweigert wird.
+7. **[gering] Die Rückkehr-Zusammenfassung erschien für Abwesenheiten ohne Inhalt.** Ein
+   längst verstummtes Archiv nach zwei Tagen zu laden zeigte „Fort 48:00:00 · Nichts ging
+   verloren" — sachlich falsch. Das Gate hängt jetzt an der simulierten Zeit, nicht an der
+   Wanduhr, plus immer bei einem Ende während der Abwesenheit.
+
+**Dabei aufgefallen, ohne dass die Review es sah:** Die Loop-Tests stubbten
+`requestAnimationFrame` global — und fingen damit auch die Frames ab, die **Angulars
+zoneless Change Detection** anfordert. Die Tests maßen also nie nur den Loop. Der Frame-Takt
+liegt jetzt hinter `FRAME_SCHEDULER` (wie der Speicher hinter `GAME_STORAGE`), und die Tests
+treiben ausschließlich den Takt des Spiels.

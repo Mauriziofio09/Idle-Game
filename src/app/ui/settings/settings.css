@@ -1,0 +1,39 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hint {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-body);
+}
+
+/* A point of no return is marked by a rule and by weight, never by a colour. */
+.warning {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-button);
+  border-top: var(--border);
+  border-bottom: var(--border);
+  padding: var(--space-3) 0;
+}
+
+.code {
+  width: 100%;
+  padding: var(--space-2);
+  background: var(--color-surface-subtle);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-label);
+  color: var(--color-text-primary);
+  resize: vertical;
+  word-break: break-all;
+}

@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 
-import { APP, END_LABELS, PANEL_TITLES } from './content/de';
+import {
+  APP,
+  END_LABELS,
+  PANEL_TITLES,
+  SETTINGS_LABELS,
+  STARTUP_NOTICES,
+  STARTUP_NOTICE_DISMISS,
+} from './content/de';
+import { OFFLINE } from './engine/balance';
+import { AutoSave } from './game/autosave';
+import type { AwayReport } from './game/away-report';
 import { GameLoop } from './game/game-loop';
 import { GameStore } from './game/game-store';
 import { formatDuration, formatPercent } from './format';
@@ -8,6 +18,8 @@ import { ArchiveLog } from './ui/archive-log/archive-log';
 import { CrossSection } from './ui/cross-section/cross-section';
 import { DetailPanel } from './ui/detail-panel/detail-panel';
 import { ResourceBar } from './ui/resource-bar/resource-bar';
+import { ReturnSummary } from './ui/return-summary/return-summary';
+import { Settings } from './ui/settings/settings';
 import { Card } from './ui/kit/card';
 import { Icon } from './ui/kit/icon';
 import { IconBox } from './ui/kit/icon-box';
@@ -15,17 +27,38 @@ import { IconBox } from './ui/kit/icon-box';
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ArchiveLog, Card, CrossSection, DetailPanel, Icon, IconBox, ResourceBar],
+  imports: [
+    ArchiveLog,
+    Card,
+    CrossSection,
+    DetailPanel,
+    Icon,
+    IconBox,
+    ResourceBar,
+    ReturnSummary,
+    Settings,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App implements OnInit {
   private readonly store = inject(GameStore);
   private readonly loop = inject(GameLoop);
+  private readonly autoSave = inject(AutoSave);
 
   protected readonly content = APP;
   protected readonly titles = PANEL_TITLES;
   protected readonly endLabels = END_LABELS;
+  protected readonly settingsLabels = SETTINGS_LABELS;
+  protected readonly noticeDismiss = STARTUP_NOTICE_DISMISS;
+
+  /** Set when the player was away long enough to deserve an account of it. */
+  protected readonly awayReport = signal<AwayReport | null>(null);
+
+  protected readonly startupNotice = computed(() => {
+    const notice = this.store.startupNotice();
+    return notice ? STARTUP_NOTICES[notice] : null;
+  });
 
   protected readonly seed = this.store.seed;
   protected readonly ended = this.store.ended;
@@ -40,6 +73,25 @@ export class App implements OnInit {
   });
 
   ngOnInit(): void {
+    const report = this.store.initialize(Date.now());
+    // The gate is on what actually happened, not on wall-clock absence: reloading an
+    // archive that fell silent days ago must not claim two days in which "nothing was
+    // lost". An ending during the absence is always worth showing.
+    if (
+      report &&
+      (report.simulatedSeconds >= OFFLINE.summaryThresholdSeconds || report.endedWhileAway)
+    ) {
+      this.awayReport.set(report);
+    }
+    this.autoSave.start();
     this.loop.start();
+  }
+
+  protected dismissReport(): void {
+    this.awayReport.set(null);
+  }
+
+  protected dismissNotice(): void {
+    this.store.dismissStartupNotice();
   }
 }

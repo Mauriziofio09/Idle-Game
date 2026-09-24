@@ -216,8 +216,10 @@ export function step(state: GameState): StepResult {
     collection.rotted += lost;
 
     if (collection.intact <= COLLECTIONS.lostThreshold) {
-      collection.rotted += collection.intact;
+      // Close the books exactly. Summing float losses tick after tick leaves a residue
+      // of ~1e-14, which is harmless in play but makes the totals fail a strict check.
       collection.intact = 0;
+      collection.rotted = Math.max(0, COLLECTIONS.unitsEach - collection.sent);
       collection.lost = true;
       if (next.transmitting === id) {
         next.transmitting = null;

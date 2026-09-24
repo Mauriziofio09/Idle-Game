@@ -40,8 +40,14 @@ export function simulate(state: GameState, ticks: number, collectEvents = true):
 }
 
 /**
- * Same as `simulate`, but handing control back between chunks so a long catch-up
- * does not freeze the browser. The result is identical to one long run.
+ * Same as `simulate`, but in bounded chunks, reporting progress as it goes. The result
+ * is identical to one long run.
+ *
+ * Note what this does NOT do: it is synchronous, so it never yields to the event loop
+ * and cannot repaint between chunks. That is deliberate — a full 24 h catch-up measures
+ * ~45 ms (see PLAN.md), far below anything a player could notice, so the progress
+ * indicator prompt.md offers "bei Bedarf" is not needed. `onChunk` exists so that a
+ * future scenario with a longer window can be made asynchronous without changing callers.
  */
 export function simulateInChunks(
   state: GameState,

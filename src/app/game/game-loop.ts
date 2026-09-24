@@ -9,9 +9,10 @@
  * Milestone 3 adds persistence and the "while you were away" summary on top of this.
  */
 
-import { DestroyRef, Injectable, inject } from '@angular/core';
+import { DestroyRef, Injectable, effect, inject } from '@angular/core';
 
 import { OFFLINE, TICK_MS } from '../engine/balance';
+import { FRAME_SCHEDULER } from './frame-scheduler';
 import { GameStore } from './game-store';
 
 /** The most game time a single step forward may cover, however it was reached. */
@@ -21,6 +22,7 @@ const MAX_CATCH_UP_MS = OFFLINE.maxHours * 60 * 60 * 1000;
 export class GameLoop {
   private readonly store = inject(GameStore);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly frames = inject(FRAME_SCHEDULER);
 
   private frame = 0;
   private lastFrame = 0;
@@ -28,9 +30,22 @@ export class GameLoop {
   /** Timestamp of the moment the tab went away. */
   private hiddenSince: number | null = null;
   private running = false;
+  /** True while the chain is stopped only because the archive fell silent. */
+  private pausedByEnding = false;
 
   constructor() {
     this.destroyRef.onDestroy(() => this.stop());
+
+    // The chain stops when the archive falls silent. A new or imported archive is
+    // alive again, and nothing else would ever ask for another frame — the clock
+    // would sit at zero until the player happened to switch tabs.
+    effect(() => {
+      const ended = this.store.ended();
+      if (!ended && this.running && this.pausedByEnding && !document.hidden) {
+        this.pausedByEnding = false;
+        this.resume();
+      }
+    });
   }
 
   start(): void {
@@ -38,12 +53,14 @@ export class GameLoop {
       return;
     }
     this.running = true;
+    this.pausedByEnding = false;
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.resume();
   }
 
   stop(): void {
     this.running = false;
+    this.pausedByEnding = false;
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.cancelFrame();
   }
@@ -55,12 +72,12 @@ export class GameLoop {
     this.cancelFrame();
     this.lastFrame = performance.now();
     this.accumulator = 0;
-    this.frame = requestAnimationFrame(this.onFrame);
+    this.frame = this.frames.request(this.onFrame);
   }
 
   private cancelFrame(): void {
     if (this.frame) {
-      cancelAnimationFrame(this.frame);
+      this.frames.cancel(this.frame);
       this.frame = 0;
     }
   }
@@ -80,10 +97,11 @@ export class GameLoop {
     }
 
     if (this.store.ended()) {
+      this.pausedByEnding = true;
       this.cancelFrame();
       return;
     }
-    this.frame = requestAnimationFrame(this.onFrame);
+    this.frame = this.frames.request(this.onFrame);
   };
 
   private readonly onVisibilityChange = (): void => {

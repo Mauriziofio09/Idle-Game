@@ -67,3 +67,25 @@ h1 {
     align-items: start;
   }
 }
+
+.notice h2 {
+  font-size: var(--font-size-h2);
+}
+
+.notice .summary {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.notice .dismiss {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-button-secondary-bg);
+  color: var(--color-button-secondary-fg);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}

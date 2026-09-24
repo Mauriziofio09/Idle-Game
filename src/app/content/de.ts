@@ -149,3 +149,72 @@ export const END_LABELS = {
   runtime: 'Das Archiv hielt',
   saved: 'Gerettet',
 } as const;
+
+export const RETURN_LABELS = {
+  title: 'Während du fort warst',
+  away: 'Fort',
+  simulated: 'Simuliert',
+  waterRose: 'Der Pegel stieg um',
+  waterFell: 'Der Pegel sank um',
+  waterHeld: 'Der Pegel hielt.',
+  energy: 'Energie',
+  entropy: 'Entropie',
+  lost: 'Verloren',
+  nothingLost: 'Nichts ging verloren.',
+  flooded: 'Überflutet',
+  dismiss: 'Weiter',
+  endedWhileAway: 'Das Archiv verstummte, während du fort warst.',
+  /** Shown when the absence exceeded the offline window. */
+  stasis: (hours: string) =>
+    `Länger als ${hours} fort. Das Archiv ging in Notfall-Stasis — darüber hinaus ist nichts weiter verfallen.`,
+  restoredFromBackup:
+    'Der letzte Spielstand war beschädigt. Das Archiv wurde aus der Sicherung geladen.',
+} as const;
+
+export const STARTUP_NOTICE_DISMISS = 'Verstanden';
+
+export const STARTUP_NOTICES = {
+  broken: {
+    title: 'Der Spielstand war nicht lesbar',
+    text: 'Beide Speicherplätze sind beschädigt. Ein neues Archiv beginnt. Der alte Stand wurde beiseitegelegt und nicht überschrieben.',
+  },
+  'from-backup': {
+    title: 'Aus der Sicherung geladen',
+    text: 'Der letzte Spielstand war beschädigt. Das Archiv wurde aus der Sicherung geladen; die letzten Sekunden fehlen.',
+  },
+} as const;
+
+export const SETTINGS_LABELS = {
+  title: 'Spielstand',
+  export: 'Exportieren',
+  exportHint: 'Kopiert das Archiv als Textzeile in die Zwischenablage.',
+  exportDone: 'In die Zwischenablage kopiert.',
+  exportFailed: 'Kopieren nicht möglich. Markiere den Text und kopiere ihn selbst.',
+  import: 'Importieren',
+  importHint: 'Füge eine exportierte Zeile ein. Der laufende Run wird ersetzt.',
+  importPlaceholder: 'Exportierte Zeile einfügen',
+  importDone: 'Archiv geladen.',
+  reset: 'Neues Archiv',
+  resetHint: 'Beendet diesen Run und beginnt von vorn. Das Vermächtnis bleibt.',
+  resetConfirm: 'Wirklich neu beginnen?',
+  resetWarning: 'Dieser Run ist danach fort. Das lässt sich nicht rückgängig machen.',
+  cancel: 'Abbrechen',
+  storageUnavailable:
+    'Dieser Browser erlaubt kein Speichern. Der Run läuft, geht beim Schließen aber verloren.',
+} as const;
+
+/** Why an import was refused. Friendly, never a stack trace. */
+export const IMPORT_PROBLEMS = {
+  'not-readable': 'Das ist keine gültige Zeile. Hast du sie vollständig kopiert?',
+  'not-json': 'Die Zeile ist beschädigt.',
+  'wrong-format': 'Diese Zeile stammt nicht aus ENTROPIE.',
+  'checksum-mismatch': 'Die Zeile ist unvollständig oder verändert worden.',
+  'unsupported-version': 'Dieser Spielstand stammt aus einer neueren Fassung des Spiels.',
+  'invalid-data': 'Der Spielstand ergibt keinen sinnvollen Zustand.',
+} as const;
+
+export const LOG_SESSION = {
+  resumed: 'Das Archiv erinnert sich.',
+  stasis: 'Notfall-Stasis beendet. Der Verfall läuft weiter.',
+  newArchive: 'Ein neues Archiv. Die Zählung beginnt von vorn.',
+} as const;

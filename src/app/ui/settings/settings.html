@@ -1,0 +1,51 @@
+@if (!canSave) {
+  <p class="hint warning">{{ labels.storageUnavailable }}</p>
+}
+
+<div class="block">
+  <app-button variant="secondary" (pressed)="exportRun()">{{ labels.export }}</app-button>
+  <p class="hint" role="status">{{ exportMessage() ?? labels.exportHint }}</p>
+  @if (exported(); as text) {
+    <textarea
+      #exportedField
+      class="code"
+      readonly
+      rows="3"
+      [value]="text"
+      [attr.aria-label]="labels.export"
+    ></textarea>
+  }
+</div>
+
+<div class="block">
+  <label class="hint" for="import-field">{{ labels.importHint }}</label>
+  <textarea
+    id="import-field"
+    class="code"
+    rows="3"
+    [placeholder]="labels.importPlaceholder"
+    [ngModel]="importText()"
+    (ngModelChange)="importText.set($event)"
+  ></textarea>
+  <app-button variant="secondary" [disabled]="importText().trim().length === 0" (pressed)="importRun()">
+    {{ labels.import }}
+  </app-button>
+  @if (importMessage(); as message) {
+    <p class="hint" role="status">{{ message }}</p>
+  }
+</div>
+
+<div class="block">
+  @if (confirmingReset()) {
+    <p class="warning">{{ labels.resetWarning }}</p>
+    <app-button #confirmButton variant="primary" (pressed)="reset()">
+      {{ labels.resetConfirm }}
+    </app-button>
+    <app-button variant="secondary" (pressed)="cancelReset()">{{ labels.cancel }}</app-button>
+  } @else {
+    <app-button #resetButton variant="secondary" (pressed)="askReset()">
+      {{ labels.reset }}
+    </app-button>
+    <p class="hint">{{ labels.resetHint }}</p>
+  }
+</div>
