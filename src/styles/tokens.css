@@ -98,6 +98,11 @@
   --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
   /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
   --stat-column-min: 96px;
+  /* DERIVED 19 — at 375 px the 96px minimum leaves room for only two columns, so the five
+     figures need three rows and 184px of the screen before the archive even begins.
+     --space-8 + --space-7 + --space-2 (48 + 32 + 8) fits three columns across a phone
+     while still holding "00:13:10" on one line. */
+  --stat-column-min-compact: 88px;
   /* DERIVED 15 — a number field wide enough for four digits plus a unit. */
   --field-number-width: 5.5em;
   /* DERIVED 16 — the checkbox square, one step of the scale. */

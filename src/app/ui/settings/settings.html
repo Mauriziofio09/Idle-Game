@@ -3,6 +3,19 @@
 }
 
 <div class="block">
+  <p class="section-label">{{ labels.sound }}</p>
+  <label class="toggle">
+    <input
+      type="checkbox"
+      [checked]="soundOn()"
+      (change)="setSound($any($event.target).checked)"
+    />
+    {{ labels.soundLabel }}
+  </label>
+  <p class="hint">{{ labels.soundHint }}</p>
+</div>
+
+<div class="block">
   <app-button variant="secondary" (pressed)="exportRun()">{{ labels.export }}</app-button>
   <p class="hint" role="status">{{ exportMessage() ?? labels.exportHint }}</p>
   @if (exported(); as text) {

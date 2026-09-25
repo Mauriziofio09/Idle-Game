@@ -250,9 +250,39 @@ export const OFFLINE = {
  * Thresholds the interface uses to label a state. Not simulation inputs, but still
  * game numbers, so they belong here rather than in a component.
  */
+/**
+ * When the archive shows the player what it has, per prompt.md section 7.
+ *
+ * Progressive disclosure, but not as a tutorial script: the protocols and the entropy
+ * readout appear with the first repair because that is the moment they start to mean
+ * something, and the mast answers on its own after two minutes. These are ticks, not
+ * seconds of wall clock, so a player who was away comes back to an archive that revealed
+ * itself at the same point in its own history.
+ */
+export const REVEAL = {
+  /** Ticks before the transmitter answers. prompt.md 7 says "nach ~2 Minuten". */
+  transmitterTicks: 120,
+} as const;
+
 export const UI_THRESHOLDS = {
   /** Below this integrity a system is shown as critical (pattern + word, never colour alone). */
   criticalIntegrity: 25,
+  /**
+   * Below this the interface may point at a system as the first thing worth repairing.
+   * High enough that a fresh archive always has something to suggest — systems start
+   * between 55 and 85 — and low enough that it names the one that needs it most.
+   */
+  suggestRepairBelow: 85,
+  /**
+   * How long the interface holds a mark on something, in ticks.
+   *
+   * Ticks rather than milliseconds, so no timer is needed anywhere: the marks are read
+   * off the run's own clock, they cannot leak past a reload, and a player catching up on
+   * hours away does not arrive to an interface lighting up for losses long past.
+   */
+  feedbackTicks: 2,
+  /** prompt.md section 7: a lost system or collection gets a small, dignified moment. */
+  lossMomentTicks: 6,
 } as const;
 
 /**

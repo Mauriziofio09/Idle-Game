@@ -1,9 +1,9 @@
-import { COLLECTIONS, ENERGY, HUMIDITY, SYSTEMS, SYSTEM_DECAY, WATER } from './balance';
+import { COLLECTIONS, ENERGY, HUMIDITY, REVEAL, SYSTEMS, SYSTEM_DECAY, WATER } from './balance';
 import { SYSTEM_IDS } from './state';
 import { applyAction } from './actions';
 import { createInitialState, isFlooded, type GameState } from './state';
 import { demand, humidityTarget, inflow, outflow, production, step } from './step';
-import { simulate } from './offline';
+import { simulate, simulateInChunks } from './offline';
 
 function allSystemsOff(state: GameState): GameState {
   let current = state;
@@ -286,6 +286,31 @@ describe('humidity', () => {
 function withoutPumps(state: GameState): GameState {
   return applyAction(state, { type: 'toggle', systemId: 'pumps', on: false }).state;
 }
+
+describe('the mast answering', () => {
+  it('reports itself once, two minutes in', () => {
+    const { events } = simulate(createInitialState('4F2A'), REVEAL.transmitterTicks * 3);
+    const online = events.filter((event) => event.type === 'transmitter-online');
+    expect(online).toHaveLength(1);
+    expect(online[0].tick).toBe(REVEAL.transmitterTicks);
+  });
+
+  it('says nothing before its time', () => {
+    const { events } = simulate(createInitialState('4F2A'), REVEAL.transmitterTicks - 1);
+    expect(events.some((event) => event.type === 'transmitter-online')).toBe(false);
+  });
+
+  it('answers at the same tick for a player who was away', () => {
+    // The reveal is read off the tick, never stored, so catching up cannot lose it or
+    // play it twice — a returning player finds it in the log where it belongs.
+    const straight = simulate(createInitialState('4F2A'), 400).events;
+    const chunked = simulateInChunks(createInitialState('4F2A'), 400).events;
+    const tickOf = (events: typeof straight) =>
+      events.filter((event) => event.type === 'transmitter-online').map((event) => event.tick);
+    expect(tickOf(chunked)).toEqual(tickOf(straight));
+    expect(tickOf(chunked)).toEqual([REVEAL.transmitterTicks]);
+  });
+});
 
 describe('rot', () => {
   it('erases a collection on a fully flooded floor within about a minute', () => {

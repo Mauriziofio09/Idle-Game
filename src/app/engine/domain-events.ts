@@ -41,6 +41,8 @@ export type DomainEvent =
       units: number;
       energy: number;
     }
+  /** The mast finishes its self test and can be used. Once per run, see balance REVEAL. */
+  | { type: 'transmitter-online'; tick: number }
   | { type: 'undersupply-changed'; tick: number; ratio: number }
   | { type: 'protocol-fired'; tick: number; ruleId: string; action: ProtocolAction }
   | { type: 'event-announced'; tick: number; kind: EventKind }

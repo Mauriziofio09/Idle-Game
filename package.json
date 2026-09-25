@@ -10,7 +10,8 @@
     "test:run": "ng test --no-watch",
     "lint": "ng lint",
     "sim": "tsx scripts/sim.ts",
-    "tune": "tsx scripts/tune.ts"
+    "tune": "tsx scripts/tune.ts",
+    "contrast": "tsx scripts/contrast.ts"
   },
   "private": true,
   "packageManager": "npm@12.0.2",

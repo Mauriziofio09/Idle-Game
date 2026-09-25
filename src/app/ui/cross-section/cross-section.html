@@ -1,3 +1,7 @@
+@if (hint(); as text) {
+  <p class="hint">{{ text }}</p>
+}
+
 <div class="sky" aria-hidden="true">
   @for (stroke of rain(); track stroke.index) {
     <span class="rain" [style.left.%]="stroke.left" [style.height.px]="stroke.length"></span>
@@ -41,6 +45,9 @@
             [class.off]="!system.on && !system.lost"
             [class.critical]="system.critical"
             [class.lost]="system.lost"
+            [class.suggested]="system.suggested"
+            [class.pulsing]="system.pulsing"
+            [class.just-lost]="system.justLost"
           >
             <button
               type="button"
@@ -49,8 +56,13 @@
               (click)="selectSystem(system.id)"
             >
               <span class="chip-name">{{ system.name }}</span>
+              @if (system.suggested) {
+                <span class="chip-hint">{{ stateLabels.suggested }}</span>
+              }
               @if (system.lost) {
-                <span class="chip-state">{{ stateLabels.lost }}</span>
+                <span class="chip-state">
+                  {{ system.justLost ? stateLabels.justLost : stateLabels.lost }}
+                </span>
               } @else {
                 <span class="chip-state">
                   {{ system.readout }}@if (!system.on) { · {{ stateLabels.off }} }
@@ -80,6 +92,9 @@
             class="chip collection"
             [class.selected]="collection.selected"
             [class.lost]="collection.lost"
+            [class.suggested]="collection.suggested"
+            [class.pulsing]="collection.pulsing"
+            [class.just-lost]="collection.justLost"
           >
             <button
               type="button"
@@ -88,8 +103,13 @@
               (click)="selectCollection(collection.id)"
             >
               <span class="chip-name">{{ collection.name }}</span>
+              @if (collection.suggested) {
+                <span class="chip-hint">{{ stateLabels.suggested }}</span>
+              }
               @if (collection.lost) {
-                <span class="chip-state">{{ stateLabels.lost }}</span>
+                <span class="chip-state">
+                  {{ collection.justLost ? stateLabels.justLost : stateLabels.lost }}
+                </span>
               } @else {
                 <span class="chip-state">
                   {{ collection.readout }}@if (collection.inTransit) {

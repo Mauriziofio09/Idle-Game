@@ -2,12 +2,21 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LOG } from '../content/de';
-import { ENERGY, LEGACY, OFFLINE, PROTOCOLS, SYSTEMS } from '../engine/balance';
+import {
+  ENERGY,
+  LEGACY,
+  OFFLINE,
+  PROTOCOLS,
+  REVEAL,
+  SYSTEMS,
+  UI_THRESHOLDS,
+} from '../engine/balance';
 import { demand, production } from '../engine/step';
 import { simulate } from '../engine/offline';
-import { createInitialState } from '../engine/state';
+import { COLLECTION_IDS, createInitialState, type SystemId } from '../engine/state';
 import { dailySeed } from '../engine/rng';
-import { SaveService } from './save';
+import { LEGACY_SCHEMA_VERSION } from '../engine/legacy';
+import { LEGACY_KEY, SaveService } from './save';
 import { GAME_STORAGE, memoryStorage, type KeyValueStorage } from './storage';
 import { GameStore } from './game-store';
 
@@ -27,6 +36,221 @@ describe('GameStore', () => {
   it('opens with the three lines that explain the situation, newest first', () => {
     const texts = store.log().map((entry) => entry.text);
     expect(texts).toEqual([...LOG.opening].reverse());
+  });
+
+  describe('what the archive shows a newcomer', () => {
+    it('opens with neither the entropy readout, the protocols nor the mast', () => {
+      const revealed = store.revealed();
+      expect(revealed.entropy).toBe(false);
+      expect(revealed.protocols).toBe(false);
+      expect(revealed.transmitter).toBe(false);
+    });
+
+    it('shows the entropy readout and the protocols with the first repair', () => {
+      expect(store.dispatch({ type: 'repair', systemId: 'generator' })).toBe(true);
+      expect(store.revealed().entropy).toBe(true);
+      expect(store.revealed().protocols).toBe(true);
+      // Two minutes have not passed, so the mast still has not answered.
+      expect(store.revealed().transmitter).toBe(false);
+    });
+
+    it('waits for the mast to answer rather than for a repair', () => {
+      store.advance(REVEAL.transmitterTicks - 1);
+      expect(store.revealed().transmitter).toBe(false);
+      store.advance(1);
+      expect(store.revealed().transmitter).toBe(true);
+      // And it still says nothing about the rest: revealing is not one switch.
+      expect(store.revealed().protocols).toBe(false);
+    });
+
+    it('holds nothing back from somebody who has sent something before', () => {
+      // A player with a legacy has already been taught. Doing it again would be
+      // condescending, so an archive opens fully for them from the first tick.
+      storage.setItem(
+        LEGACY_KEY,
+        JSON.stringify({
+          schemaVersion: LEGACY_SCHEMA_VERSION,
+          sent: { maps: LEGACY.unitsPerFragment },
+          runs: 1,
+        }),
+      );
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: GAME_STORAGE, useValue: storage }],
+      });
+      const veteran = TestBed.inject(GameStore);
+      expect(veteran.legacyTotal()).toBeGreaterThan(0);
+      expect(veteran.revealed()).toEqual({
+        entropy: true,
+        protocols: true,
+        transmitter: true,
+      });
+    });
+
+    it('shows everything once the run is over', () => {
+      store.advance(24 * 60 * 60);
+      expect(store.state().ended).toBe(true);
+      expect(store.revealed()).toEqual({ entropy: true, protocols: true, transmitter: true });
+    });
+  });
+
+  describe('the first sensible action', () => {
+    it('points at the power or the pumps before anything has been repaired', () => {
+      const suggestion = store.suggestion();
+      expect(suggestion?.kind).toBe('system');
+      expect(['generator', 'pumps']).toContain(
+        suggestion !== null && suggestion.kind === 'system' ? suggestion.id : null,
+      );
+    });
+
+    it('never names anything the player cannot do', () => {
+      // Walked over a whole run, every piece of advice must be actionable at the moment it
+      // is given.
+      //
+      // Honest note on coverage: the collection branch's canApply check is exercised here
+      // and removing it fails this test. The *system* branch's check is not, and cannot be
+      // with today's numbers — an archive nobody repairs never spends material, its battery
+      // actually fills as consumers are lost, and by the time a repair is unaffordable the
+      // system is lost and already excluded. That check is defence against a future balance
+      // change, not covered code, and PLAN.md section 17 says so rather than implying more.
+      let advised = 0;
+      for (let minute = 0; minute < 30 && !store.state().ended; minute += 1) {
+        const suggestion = store.suggestion();
+        if (suggestion !== null) {
+          const action =
+            suggestion.kind === 'system'
+              ? ({ type: 'repair', systemId: suggestion.id } as const)
+              : ({ type: 'transmit-start', collectionId: suggestion.id } as const);
+          expect(store.canApply(action)).toBe(true);
+          advised += 1;
+        }
+        store.advance(60);
+      }
+      expect(advised).toBeGreaterThan(0);
+    });
+
+    it('falls silent after a repair, until the mast has something to say', () => {
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      expect(store.suggestion()).toBeNull();
+
+      store.advance(REVEAL.transmitterTicks);
+      const suggestion = store.suggestion();
+      expect(suggestion?.kind).toBe('collection');
+    });
+
+    it('stops advising for good once something is on the air', () => {
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      store.advance(REVEAL.transmitterTicks);
+      const suggestion = store.suggestion();
+      expect(suggestion?.kind).toBe('collection');
+
+      if (suggestion !== null && suggestion.kind === 'collection') {
+        expect(store.dispatch({ type: 'transmit-start', collectionId: suggestion.id })).toBe(true);
+      }
+      // Sending, then long enough for units to have gone out: the archive stops nudging.
+      store.advance(60);
+      expect(store.suggestion()).toBeNull();
+    });
+
+    it('goes quiet again if the player stops the transmission after sending', () => {
+      // The archive advises until something has been sent — not merely until the mast is
+      // busy. Stopping mid-transmission must not restart the advice, or a player who
+      // changed their mind would be nagged for the rest of the run.
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      store.advance(REVEAL.transmitterTicks);
+      const suggestion = store.suggestion();
+      expect(suggestion?.kind).toBe('collection');
+      if (suggestion !== null && suggestion.kind === 'collection') {
+        expect(store.dispatch({ type: 'transmit-start', collectionId: suggestion.id })).toBe(true);
+      }
+
+      store.advance(60);
+      const sent = COLLECTION_IDS.reduce((sum, id) => sum + store.state().collections[id].sent, 0);
+      expect(sent).toBeGreaterThan(0);
+
+      expect(store.dispatch({ type: 'transmit-stop' })).toBe(true);
+      expect(store.state().transmitting).toBeNull();
+      expect(store.suggestion()).toBeNull();
+    });
+
+    it('says nothing at all once the run is over', () => {
+      // Guaranteed by canApply refusing every action on a finished archive rather than by
+      // a check inside the suggestion itself; this holds the guarantee, wherever it lives.
+      store.advance(24 * 60 * 60);
+      expect(store.state().ended).toBe(true);
+      expect(store.suggestion()).toBeNull();
+    });
+  });
+
+  describe('answering an action, and marking a loss', () => {
+    it('marks what the player just acted on, and lets the mark fade', () => {
+      expect(store.justActed('system', 'generator')).toBe(false);
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      expect(store.justActed('system', 'generator')).toBe(true);
+      // Only that one thing, not everything on the screen.
+      expect(store.justActed('system', 'pumps')).toBe(false);
+
+      store.advance(UI_THRESHOLDS.feedbackTicks);
+      expect(store.justActed('system', 'generator')).toBe(true);
+      store.advance(1);
+      expect(store.justActed('system', 'generator')).toBe(false);
+    });
+
+    it('does not carry a mark into the next archive', () => {
+      // The window compares ticks, and a new archive starts at 0 — without clearing, the
+      // comparison is true again and a chip nobody has touched pulses at the very start
+      // of every later archive.
+      store.advance(300);
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      expect(store.justActed('system', 'generator')).toBe(true);
+
+      store.startNewArchive();
+      expect(store.state().tick).toBe(0);
+      expect(store.justActed('system', 'generator')).toBe(false);
+    });
+
+    it('marks a collection the player put on the air', () => {
+      store.advance(REVEAL.transmitterTicks);
+      expect(store.dispatch({ type: 'transmit-start', collectionId: 'maps' })).toBe(true);
+      expect(store.justActed('collection', 'maps')).toBe(true);
+    });
+
+    it('leaves nothing marked when the action was refused', () => {
+      // A lost system cannot be repaired. The refusal must be silent: nothing to pulse,
+      // because nothing happened.
+      let gone: string | undefined;
+      for (let i = 0; i < 60 * 60 && gone === undefined; i += 1) {
+        store.advance(1);
+        gone = store.state().chronicle.find((entry) => entry.kind === 'system-lost')?.id;
+      }
+      expect(gone).toBeDefined();
+      if (gone === undefined) return;
+
+      const lostSystem = gone as SystemId;
+      expect(store.dispatch({ type: 'repair', systemId: lostSystem })).toBe(false);
+      expect(store.justActed('system', lostSystem)).toBe(false);
+    });
+
+    it('holds a quiet moment on something just lost, then lets it be', () => {
+      // Run until the archive loses something, then read the moment off the chronicle.
+      let lost: { kind: string; id: string; tick: number } | undefined;
+      for (let i = 0; i < 60 * 60 && lost === undefined; i += 1) {
+        store.advance(1);
+        lost = store
+          .state()
+          .chronicle.find(
+            (entry) => entry.kind === 'system-lost' || entry.kind === 'collection-lost',
+          );
+      }
+      expect(lost).toBeDefined();
+      if (lost === undefined) return;
+
+      const kind = lost.kind === 'system-lost' ? ('system' as const) : ('collection' as const);
+      expect(store.justLost(kind, lost.id)).toBe(true);
+
+      store.advance(UI_THRESHOLDS.lossMomentTicks + 1);
+      expect(store.justLost(kind, lost.id)).toBe(false);
+    });
   });
 
   it('starts on a seed a share link could carry', () => {

@@ -11,7 +11,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { LOG, LOG_SESSION } from '../content/de';
 import type { Action } from '../engine/actions';
 import { applyAction, canApply, dismantleYield, repairPreview } from '../engine/actions';
-import { ENERGY, ENTROPY, METRES_PER_FLOOR, UI_THRESHOLDS } from '../engine/balance';
+import { ENERGY, ENTROPY, METRES_PER_FLOOR, REVEAL, UI_THRESHOLDS } from '../engine/balance';
 import { OFFLINE, TICK_MS } from '../engine/balance';
 import { simulateInChunks } from '../engine/offline';
 import { dailySeed, normaliseSeed, stateToSeed } from '../engine/rng';
@@ -57,6 +57,15 @@ export type Selection =
   | { kind: 'floor'; index: number }
   | null;
 
+/**
+ * What the archive may suggest doing next. Narrower than Selection on purpose: a floor
+ * is something to look at, never something to do.
+ */
+export type Suggestion =
+  | { kind: 'system'; id: SystemId }
+  | { kind: 'collection'; id: CollectionId }
+  | null;
+
 /** The log keeps this many lines; a long catch-up must not grow it without bound. */
 const MAX_LOG_ENTRIES = 120;
 
@@ -85,6 +94,119 @@ export class GameStore {
   readonly floorCount = computed(() => floorCount(this._state()));
   readonly scenarioId = computed(() => this._state().scenarioId);
   readonly energyShare = computed(() => (this._state().energy / ENERGY.capacity) * 100);
+
+  /**
+   * What the archive has shown the player so far — prompt.md section 7's progressive
+   * disclosure.
+   *
+   * Derived from the run's own history, never stored: the first repair and the tick are
+   * both already in the save, so a reload cannot forget what had been revealed and a
+   * player who was away comes back to an archive that opened up at the same point in its
+   * own history rather than at the same point on their clock.
+   *
+   * Somebody who has sent something before is shown everything at once. The disclosure is
+   * there to teach a first archive, and re-teaching a player who already has a legacy
+   * would be condescending rather than gentle. So is holding things back from someone
+   * reading the chronicle of a finished run.
+   */
+  readonly revealed = computed(() => {
+    const state = this._state();
+    const knowsTheHouse = state.ended || legacyTotalSent(this._legacy()) > 0;
+    const hasRepaired = SYSTEM_IDS.some((id) => state.systems[id].repairs > 0);
+    return {
+      /** The entropy readout means nothing until a repair has paid into it. */
+      entropy: knowsTheHouse || hasRepaired,
+      /** Protocols automate repairing, so they arrive with the first repair. */
+      protocols: knowsTheHouse || hasRepaired,
+      /** The mast answers on its own; the engine reports the moment. */
+      transmitter: knowsTheHouse || state.tick >= REVEAL.transmitterTicks,
+    };
+  });
+
+  /**
+   * The one thing worth doing next, or null once the player clearly does not need telling.
+   *
+   * prompt.md section 7 asks for the first sensible action to be "dezent hervorgehoben".
+   * Two rules keep it from turning into a quest marker: it only ever names something the
+   * player could actually afford this second, and it falls silent for good once they have
+   * repaired something and put a collection on the air. After that the archive stops
+   * advising and goes back to simply reporting.
+   */
+  readonly suggestion = computed<Suggestion>(() => {
+    const state = this._state();
+    // A finished run needs no guard of its own: canApply refuses every action once the
+    // archive has ended, so every branch below already comes out empty. An explicit check
+    // here would read as protection while being unreachable — the test below states the
+    // guarantee instead.
+    const hasRepaired = SYSTEM_IDS.some((id) => state.systems[id].repairs > 0);
+    if (!hasRepaired) {
+      // The generator first, then the pumps: power before water, because a repair costs
+      // energy and an archive without power cannot act at all.
+      for (const id of ['generator', 'pumps'] as const) {
+        const system = state.systems[id];
+        if (!system.lost && system.integrity < UI_THRESHOLDS.suggestRepairBelow) {
+          if (canApply(state, { type: 'repair', systemId: id })) {
+            return { kind: 'system', id };
+          }
+        }
+      }
+    }
+
+    const hasSent = COLLECTION_IDS.some((id) => state.collections[id].sent > 0);
+    if (!hasSent && state.transmitting === null && this.revealed().transmitter) {
+      for (const id of COLLECTION_IDS) {
+        if (canApply(state, { type: 'transmit-start', collectionId: id })) {
+          return { kind: 'collection', id };
+        }
+      }
+    }
+
+    return null;
+  });
+
+  /**
+   * What the player just did, so the interface can answer immediately — prompt.md
+   * section 7 asks every action for a visible reaction.
+   *
+   * Deliberately not part of GameState: a pulse is a fact about this second in front of
+   * this screen, not about the archive, and reloading into a still-pulsing bar would be
+   * a small lie about what just happened.
+   */
+  private readonly _lastTouched = signal<{ key: string; tick: number } | null>(null);
+
+  /**
+   * Counts how often the archive has been replaced. The interface needs a single, certain
+   * signal for "everything on screen may have just been torn down", because a new archive
+   * can remove whatever the keyboard was standing on — a tab, a control inside a panel, or
+   * a system that has not been revealed yet.
+   */
+  private readonly _generation = signal(0);
+  readonly archiveGeneration = this._generation.asReadonly();
+
+  /** True for a moment or two after the player acted on this thing. */
+  justActed(kind: 'system' | 'collection', id: string): boolean {
+    const touched = this._lastTouched();
+    if (touched === null || touched.key !== `${kind}:${id}`) {
+      return false;
+    }
+    return this._state().tick - touched.tick <= UI_THRESHOLDS.feedbackTicks;
+  }
+
+  /**
+   * True for a few ticks after this thing was lost, which is the small dignified moment
+   * prompt.md section 7 asks for. Read straight out of the chronicle, which already
+   * records every loss with the tick it happened on.
+   */
+  justLost(kind: 'system' | 'collection', id: string): boolean {
+    const state = this._state();
+    const wanted = kind === 'system' ? 'system-lost' : 'collection-lost';
+    return state.chronicle.some(
+      (entry) =>
+        entry.kind === wanted &&
+        entry.id === id &&
+        state.tick - entry.tick <= UI_THRESHOLDS.lossMomentTicks,
+    );
+  }
 
   /** False when the browser refuses storage; the settings panel says so plainly. */
   readonly canSave = this.saves.available;
@@ -275,6 +397,11 @@ export class GameStore {
   /** Puts a new archive in place. Banking, if any, is the caller's decision. */
   private beginArchive(seed: string, now: number, scenarioId: ScenarioId = 'standard'): void {
     this.saves.clearRun();
+    // A pulse belongs to the archive it happened in. Without this the mark survives into
+    // the next one, where the tick starts at 0 and the window comparison is true again:
+    // a stray pulse on a chip nobody has touched, at the start of every later archive.
+    this._lastTouched.set(null);
+    this._generation.update((n) => n + 1);
     this._state.set(
       createInitialState(seed, {
         protocolSlots: protocolSlotsFor(this._legacy()),
@@ -314,7 +441,27 @@ export class GameStore {
     }
     this._state.set(result.state);
     this.record(result.events.map((event) => ({ event, tick: event.tick })));
+    this.markTouched(action, result.state.tick);
     return true;
+  }
+
+  /** Remembers what the action was aimed at, so the interface can answer it at once. */
+  private markTouched(action: Action, tick: number): void {
+    switch (action.type) {
+      case 'repair':
+      case 'toggle':
+      case 'dismantle':
+        this._lastTouched.set({ key: `system:${action.systemId}`, tick });
+        return;
+      case 'transmit-start':
+      case 'relocate':
+      case 'burn':
+        this._lastTouched.set({ key: `collection:${action.collectionId}`, tick });
+        return;
+      default:
+        // transmit-stop names no target of its own; the log line carries that one.
+        this._lastTouched.set(null);
+    }
   }
 
   canApply(action: Action): boolean {

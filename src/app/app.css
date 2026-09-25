@@ -89,3 +89,71 @@ h1 {
   font-size: var(--font-size-label);
   cursor: pointer;
 }
+
+/* ------------------------------------------------------------- The panel strip
+   prompt.md section 7: "Mobile: Querschnitt oben, Panels als Tabs darunter."
+
+   Above the phone breakpoint the whole stack is on screen and the strip is not
+   rendered at all, so there is no media query to listen to in TypeScript and no
+   element to measure — the layout decides, the component only remembers which tab
+   is open. */
+.tabs {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  /* --breakpoint-compact; a media query cannot read a custom property. */
+  .tabs {
+    display: flex;
+    gap: 0;
+    /* Six single words do not fit across 375 px, so the strip scrolls sideways
+       rather than wrapping into a block that pushes the archive off screen. */
+    overflow-x: auto;
+    border: var(--border);
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    border: none;
+    /* Structural dividers, in keeping with borders being the design. */
+    border-right: var(--border-hairline);
+    border-radius: var(--radius);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-label);
+    font-weight: var(--font-weight-button);
+    letter-spacing: var(--letter-spacing-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .tab:last-child {
+    border-right: none;
+  }
+
+  /* The strip scrolls sideways, which makes it a clipping box in both directions, so an
+     outline drawn 2px outside a tab would be cut off at the top and bottom edges. Drawing
+     it inside keeps the focus visible, which prompt.md section 7 requires. */
+  .tab:focus-visible {
+    outline-offset: calc(-1 * var(--focus-outline-offset));
+  }
+
+  /* The open tab inverts, the same way a selected chip does. Not colour alone:
+     aria-selected carries it for assistive technology, and the panel below is
+     the visible answer either way. */
+  .tab.active {
+    background: var(--color-button-primary-bg);
+    color: var(--color-button-primary-fg);
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .panel.active {
+    display: block;
+  }
+}

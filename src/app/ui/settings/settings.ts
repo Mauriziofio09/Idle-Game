@@ -12,6 +12,7 @@ import { FormsModule } from '@angular/forms';
 
 import { IMPORT_PROBLEMS, SETTINGS_LABELS } from '../../content/de';
 import { GameStore } from '../../game/game-store';
+import { Sound } from '../../game/sound';
 import { Button } from '../kit/button';
 
 /**
@@ -29,10 +30,18 @@ import { Button } from '../kit/button';
 })
 export class Settings {
   private readonly store = inject(GameStore);
+  private readonly sound = inject(Sound);
   private readonly injector = inject(Injector);
 
   protected readonly labels = SETTINGS_LABELS;
   protected readonly canSave = this.store.canSave;
+
+  /** prompt.md section 7 wants sound off by default, with the switch in the settings. */
+  protected readonly soundOn = this.sound.enabled;
+
+  protected setSound(on: boolean): void {
+    this.sound.setEnabled(on);
+  }
 
   protected readonly exported = signal<string | null>(null);
   protected readonly exportMessage = signal<string | null>(null);

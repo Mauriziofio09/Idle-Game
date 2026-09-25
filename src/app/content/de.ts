@@ -124,7 +124,38 @@ export const STATE_LABELS = {
   off: 'aus',
   on: 'an',
   inTransit: 'unterwegs',
+  /** Marks the one thing worth doing next. A word, never only the green. */
+  suggested: 'zuerst',
+  /** Held briefly on something just lost, so the moment is noticed. */
+  justLost: 'eben verloren',
 } as const;
+
+/**
+ * The quiet line under the cross-section that names the first sensible action.
+ * prompt.md section 7 asks for a hint, not a tutorial: one sentence, and only while it
+ * is still needed.
+ */
+export const HINTS = {
+  repairFirst: (name: string) => `Zuerst: ${name} reparieren.`,
+  sendFirst: (name: string) => `Der Sendemast ist bereit. ${name} senden.`,
+} as const;
+
+/**
+ * Short labels for the tab strip that replaces the panel stack on a phone.
+ * Short because six of them have to fit across 375 px without the strip becoming a
+ * puzzle; the panels keep their full titles once open.
+ */
+export const PANEL_TABS = {
+  detail: 'Auswahl',
+  protocols: 'Protokolle',
+  log: 'Log',
+  legacy: 'Vermächtnis',
+  scenarios: 'Archive',
+  settings: 'Einstellungen',
+} as const;
+
+/** Names the tab strip for screen readers, since the tabs themselves are single words. */
+export const PANEL_TABS_LABEL = 'Panels';
 
 export const PANEL_TITLES = {
   detail: 'Auswahl',
@@ -369,6 +400,9 @@ export const SETTINGS_LABELS = {
   cancel: 'Abbrechen',
   storageUnavailable:
     'Dieser Browser erlaubt kein Speichern. Der Run läuft, geht beim Schließen aber verloren.',
+  sound: 'Ton',
+  soundLabel: 'Regen und leise Hinweistöne',
+  soundHint: 'Standardmäßig aus. Wird im Browser erzeugt, nichts wird geladen.',
 } as const;
 
 /** Why an import was refused. Friendly, never a stack trace. */

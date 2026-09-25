@@ -68,6 +68,8 @@ export function describe(
       };
     case 'floor-flooded':
       return { kind: 'loss', text: LOG.floorFlooded(floorDative(event.floor, floors)) };
+    case 'transmitter-online':
+      return { kind: 'note', text: LOG.transmitterAnswers };
     case 'undersupply-changed':
       return {
         kind: 'note',

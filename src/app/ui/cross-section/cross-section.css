@@ -160,6 +160,11 @@
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-button);
   line-height: var(--line-height-none);
+  /* The button is a flex column aligned to the start, so its children are sized by their
+     content and a long name grows straight past the chip instead of being clipped by the
+     rule below — "Kustoden-Depot" ran four pixels over the border at 375px. Capping the
+     width is what lets the ellipsis do its job. */
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -239,6 +244,18 @@
  * row keeps the whole archive on one or two screens, which is what makes it playable.
  */
 @media (max-width: 599px) {
+  /*
+   * A thumb, not a mouse. Measured at 375 px the chip button came out 28px tall, which
+   * clears the 24px WCAG 2.5.8 asks of a target but is a poor thing to aim at while the
+   * water is rising. 40px is a size styles.md itself sanctions for a square control
+   * ("Icon containers: square, fixed size (e.g. 64x64px or 40x40px)"), so it needs no
+   * invented number.
+   */
+  .chip-select {
+    min-height: var(--icon-box-sm);
+    justify-content: center;
+  }
+
   /* --breakpoint-compact; a media query cannot read a custom property. */
   .floor {
     min-height: var(--floor-min-height-compact);
@@ -260,4 +277,90 @@
     max-width: none;
     flex: 1 1 calc(50% - var(--space-1));
   }
+}
+
+/* -------------------------------------------------- The first sensible action
+   prompt.md section 7 asks for it to be "dezent hervorgehoben". The accent marks
+   it and the word "zuerst" says it, so the hint never rests on colour alone. */
+.hint {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-3);
+  border-left: var(--border-width) solid var(--color-accent);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+}
+
+/* The accent carries the mark as a border. As a graphic it needs 3:1 (WCAG 1.4.11) and
+   reaches 4.35:1 on white, which is also exactly why the word beside it must not be
+   green: at 4.35:1 the accent is below the 4.5:1 that AA asks of text this size, and
+   styles.md prescribes the colour for icons and highlights, not for reading. */
+.chip.suggested {
+  border-color: var(--color-accent);
+}
+
+/* A sibling of the name, never inside it: the name ellipsises at phone width, and a
+   marker that can be truncated away would leave the chip carrying its meaning in the
+   accent border alone — which is the one thing this interface never does. */
+.chip-hint {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-button);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+/* The inverted chip reads white on black, like every other word inside it. */
+.chip.selected .chip-hint {
+  color: var(--color-button-primary-fg);
+}
+
+/* ---------------------------------------------------------- Immediate feedback
+   prompt.md section 7: every action gets a visible reaction. The bar already jumps
+   because the number changed; this is the short acknowledgement around it. Both
+   animations are driven by --motion-slow, which prefers-reduced-motion sets to 0ms,
+   so a player who asked for stillness simply gets the settled state. */
+@keyframes chip-pulse {
+  from {
+    border-color: var(--color-accent);
+  }
+  to {
+    border-color: var(--color-border);
+  }
+}
+
+.chip.pulsing {
+  animation: chip-pulse var(--motion-slow) var(--motion-ease);
+}
+
+/* A suggested chip stays accent-bordered, so it must not animate back to black. */
+.chip.pulsing.suggested {
+  animation: none;
+}
+
+/*
+ * The dignified moment for something just lost. It does not flash or shake: the chip
+ * arrives at its final inverted state slowly, holds the words "eben verloren" for a few
+ * ticks, and then settles into "VERLOREN" like everything else that is gone.
+ */
+@keyframes chip-mourn {
+  from {
+    background: var(--color-background);
+    color: var(--color-text-primary);
+  }
+  to {
+    background: var(--color-lost-bg);
+    color: var(--color-lost-fg);
+  }
+}
+
+.chip.just-lost,
+.chip.just-lost .chip-state {
+  animation: chip-mourn var(--motion-slow) var(--motion-ease);
+}
+
+/* The held word is quieter than the permanent one: lower case, no letter-spacing. */
+.chip.just-lost .chip-state {
+  text-transform: none;
+  letter-spacing: normal;
 }

@@ -40,30 +40,104 @@
       <app-cross-section />
     </app-card>
 
+    <div
+      class="tabs"
+      role="tablist"
+      [attr.aria-label]="tabsLabel"
+    >
+      @for (tab of tabs(); track tab.id; let i = $index) {
+        <button
+          #tabButton
+          type="button"
+          role="tab"
+          class="tab"
+          [id]="'tab-' + tab.id"
+          [class.active]="activePanel() === tab.id"
+          [attr.aria-selected]="activePanel() === tab.id"
+          [attr.aria-controls]="'panel-' + tab.id"
+          [attr.tabindex]="activePanel() === tab.id ? 0 : -1"
+          (click)="selectPanel(tab.id)"
+          (keydown)="onTabKeys($event, i)"
+        >
+          {{ tab.label }}
+        </button>
+      }
+    </div>
+
     <div class="panels">
-      <app-card [label]="titles.detail">
-        <app-detail-panel />
-      </app-card>
+      <div
+        id="panel-detail"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-detail"
+        [class.active]="activePanel() === 'detail'"
+      >
+        <app-card [label]="titles.detail">
+          <app-detail-panel />
+        </app-card>
+      </div>
 
-      <app-card [label]="protocolLabels.title">
-        <app-protocols />
-      </app-card>
+      @if (revealed().protocols) {
+        <div
+          id="panel-protocols"
+          class="panel"
+          role="tabpanel"
+          aria-labelledby="tab-protocols"
+          [class.active]="activePanel() === 'protocols'"
+        >
+          <app-card [label]="protocolLabels.title">
+            <app-protocols />
+          </app-card>
+        </div>
+      }
 
-      <app-card [label]="titles.log">
-        <app-archive-log />
-      </app-card>
+      <div
+        id="panel-log"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-log"
+        [class.active]="activePanel() === 'log'"
+      >
+        <app-card [label]="titles.log">
+          <app-archive-log />
+        </app-card>
+      </div>
 
-      <app-card [label]="legacyLabels.title">
-        <app-legacy />
-      </app-card>
+      <div
+        id="panel-legacy"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-legacy"
+        [class.active]="activePanel() === 'legacy'"
+      >
+        <app-card [label]="legacyLabels.title">
+          <app-legacy />
+        </app-card>
+      </div>
 
-      <app-card [label]="scenarioLabels.title">
-        <app-scenarios />
-      </app-card>
+      <div
+        id="panel-scenarios"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-scenarios"
+        [class.active]="activePanel() === 'scenarios'"
+      >
+        <app-card [label]="scenarioLabels.title">
+          <app-scenarios />
+        </app-card>
+      </div>
 
-      <app-card [label]="settingsLabels.title">
-        <app-settings />
-      </app-card>
+      <div
+        id="panel-settings"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-settings"
+        [class.active]="activePanel() === 'settings'"
+      >
+        <app-card [label]="settingsLabels.title">
+          <app-settings />
+        </app-card>
+      </div>
     </div>
   </div>
 </main>

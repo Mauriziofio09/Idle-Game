@@ -17,6 +17,7 @@ import {
   ENERGY,
   ENTROPY,
   HUMIDITY,
+  REVEAL,
   SECONDS_PER_TICK,
   SYSTEMS,
   SYSTEM_DECAY,
@@ -153,6 +154,13 @@ export function step(state: GameState): StepResult {
   const dt = SECONDS_PER_TICK;
 
   next.tick += 1;
+
+  // 0 — The mast answers on its own, once, two minutes in. It is reported rather than
+  //     stored: the tick is already in the save, so a reload cannot lose or repeat it,
+  //     and a player catching up offline hears it at the same point in the run.
+  if (next.tick === REVEAL.transmitterTicks) {
+    events.push({ type: 'transmitter-online', tick: next.tick });
+  }
 
   // 1 — Entropy only ever grows.
   next.entropy += ENTROPY.passivePerSecond * dt;

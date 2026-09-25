@@ -29,7 +29,9 @@ import { Stat } from '../kit/stat';
       [note]="energyNote()"
     />
     <app-stat [value]="material()" [label]="labels.material" />
-    <app-stat [value]="entropy()" [label]="labels.entropy" [note]="decayNote()" />
+    @if (showEntropy()) {
+      <app-stat [value]="entropy()" [label]="labels.entropy" [note]="decayNote()" />
+    }
     <app-stat [value]="water()" [label]="labels.water" />
     <app-stat [value]="runtime()" [label]="labels.runtime" />
   `,
@@ -38,6 +40,18 @@ import { Stat } from '../kit/stat';
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(var(--stat-column-min), 1fr));
       gap: var(--space-4);
+    }
+
+    /*
+     * Phone widths. --breakpoint-compact; a media query cannot read a custom property.
+     * Narrower columns and a tighter gap fit three figures per row instead of two, which
+     * is 64px of screen handed back to the cross-section — the thing the player came for.
+     */
+    @media (max-width: 599px) {
+      :host {
+        grid-template-columns: repeat(auto-fit, minmax(var(--stat-column-min-compact), 1fr));
+        gap: var(--space-2) var(--space-3);
+      }
     }
   `,
 })
@@ -63,6 +77,13 @@ export class ResourceBar {
       formatInteger(ENERGY.capacity),
     );
   });
+
+  /**
+   * Entropy is hidden until the first repair has paid into it — prompt.md section 7. A
+   * number that reads 0.0 with no way to move it teaches nothing; the same number
+   * appearing the moment a repair costs something teaches the whole game.
+   */
+  protected readonly showEntropy = computed(() => this.store.revealed().entropy);
 
   protected readonly decayNote = computed(() =>
     RESOURCE_NOTES.decay(formatMultiplier(this.store.decayMultiplier())),

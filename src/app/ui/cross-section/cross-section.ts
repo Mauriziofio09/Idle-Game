@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import {
   COLLECTION_NAMES,
   DETAIL_LABELS,
+  HINTS,
   STATE_LABELS,
   SYSTEM_NAMES,
   floorName,
@@ -86,7 +87,7 @@ export class CrossSection {
         name: floorName(index, floors),
         flooded: this.store.floorIsFlooded(index),
         humidity: formatPercent(state.humidity[index]),
-        systems: this.store.systemsOnFloor(index).map((id) => {
+        systems: this.visibleSystems(index).map((id) => {
           const system = state.systems[id];
           return {
             id,
@@ -99,6 +100,9 @@ export class CrossSection {
             lost: system.lost,
             critical: this.store.isCritical(id),
             selected: this.isSystemSelected(id),
+            suggested: this.isSuggested('system', id),
+            pulsing: this.store.justActed('system', id),
+            justLost: this.store.justLost('system', id),
           };
         }),
         collections: this.store.collectionsOnFloor(index).map((id) => {
@@ -114,11 +118,52 @@ export class CrossSection {
             lost: collection.lost,
             inTransit: collection.transitTicks > 0,
             selected: this.isCollectionSelected(id),
+            suggested: this.isSuggested('collection', id),
+            pulsing: this.store.justActed('collection', id),
+            justLost: this.store.justLost('collection', id),
           };
         }),
       };
     });
   });
+
+  /**
+   * The systems the player may see on a floor. The mast is held back until it answers
+   * — prompt.md section 7 — so the first two minutes are about keeping the lights on
+   * rather than about a machine that cannot be used yet. The store filters nothing: the
+   * engine and the simulation must always see the whole house.
+   */
+  private visibleSystems(floor: number): ReturnType<GameStore['systemsOnFloor']> {
+    const systems = this.store.systemsOnFloor(floor);
+    if (this.store.revealed().transmitter) {
+      return systems;
+    }
+    return systems.filter((id) => id !== 'transmitter');
+  }
+
+  /**
+   * One quiet sentence naming the first sensible action, or nothing at all.
+   * The same suggestion also marks its target in the building, so the words and the
+   * thing they point at cannot drift apart.
+   */
+  protected readonly hint = computed(() => {
+    const suggestion = this.store.suggestion();
+    if (suggestion === null) {
+      return null;
+    }
+    if (suggestion.kind === 'system') {
+      return HINTS.repairFirst(SYSTEM_NAMES[suggestion.id]);
+    }
+    if (suggestion.kind === 'collection') {
+      return HINTS.sendFirst(COLLECTION_NAMES[suggestion.id]);
+    }
+    return null;
+  });
+
+  private isSuggested(kind: 'system' | 'collection', id: string): boolean {
+    const suggestion = this.store.suggestion();
+    return suggestion?.kind === kind && suggestion.id === id;
+  }
 
   protected isSystemSelected(id: string): boolean {
     const selection = this.selection();

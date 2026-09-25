@@ -151,7 +151,7 @@ Tokens — keine neuen Farbtöne, keine neue Ästhetik:
    Label „VERLOREN". Depth kommt laut `styles.md` aus Kontrast, nicht aus Blur — das passt.
 7. **Fokus** — `outline: var(--border-width) solid var(--color-accent); outline-offset: 2px`.
    `styles.md` definiert keinen Fokusstil; Grün ist sichtbar auf Schwarz *und* Weiß und ist
-   der einzige Akzent. Kontrast gegen Weiß: 4.6:1 (AA für UI-Komponenten erfüllt).
+   der einzige Akzent. Kontrast gegen Weiß: 4,35:1 (AA für UI-Komponenten erfüllt).
 8. **Bewegung** — `--motion-fast: 120ms`, `--motion-slow: 400ms`, `--motion-ease: linear`.
    `styles.md` schweigt zu Bewegung; linear + kurz ist die zurückhaltendste Lesart der
    utilitaristischen Haltung. Unter `prefers-reduced-motion` werden beide auf `0ms` gesetzt.
@@ -175,7 +175,11 @@ damit das Gebäude auf dem Handy lesbar bleibt (nur Dokumentation: `@media` kann
 Custom Property lesen) ·
 `--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten ·
 `--field-number-width` 5,5em für ein Zahlenfeld mit vier Stellen plus Einheit ·
-`--checkbox-size` = `--space-4` für das Kästchen.
+`--checkbox-size` = `--space-4` für das Kästchen ·
+**19** (M7) `--stat-column-min-compact` 88px (= `--space-8` + `--space-7` + `--space-2`)
+als Umbruchbreite der Kennzahlen auf dem Telefon: mit den 96px der Desktop-Ableitung passen
+bei 375px nur zwei Spalten, also brauchen fünf Zahlen drei Zeilen und 184px Bildschirm,
+bevor das Archiv überhaupt beginnt. 88px fasst drei Spalten und hält „00:13:10" einzeilig.
 
 Formularelemente (M4, `src/styles.css`): `styles.md` nennt Inputs unter „Shape Language"
 (kein Radius, 2px schwarz, kein Schatten), beschreibt aber keine Select- oder Checkbox-Optik.
@@ -194,7 +198,7 @@ Formsprache wie alles andere statt der System-Checkbox.
 
 Kontrastprüfung (WCAG AA, `styles.md` nennt keine eigenen Werte):
 `#1A1A1A` auf Weiß = 17.4:1 ✅ · `#6B7280` auf Weiß = 4.8:1 ✅ (AA für Text ab 4.5)
-· `#0A8C3A` auf Weiß = 4.6:1 ✅ (AA für Grafik/UI) — Grün wird **nicht** für Fließtext benutzt.
+· `#0A8C3A` auf Weiß = 4,35:1 ✅ (AA für Grafik/UI) — Grün wird **nicht** für Fließtext benutzt.
 
 ### Komponenten-Kit (`ui/kit/`, exakt nach `styles.md`)
 `ui-button` (primary/secondary, full-width, 16px vertikal, 2px Rahmen, kein Radius) ·
@@ -303,14 +307,14 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Tagesarchiv (Seed aus Datum)
 
 ### M7 · Feel & Politur
-- [ ] **`styles.md` erneut lesen**
-- [ ] Progressive Enthüllung (Protokolle nach 1. Reparatur, Mast nach ~2 min, Entropie ab 1. Reparatur)
-- [ ] Erste 60 s über das Log, erste sinnvolle Aktion dezent hervorgehoben
-- [ ] Mikro-Feedback je Aktion, würdevoller Verlust-Moment
-- [ ] `prefers-reduced-motion` überall
-- [ ] Barrierefreiheit: Tastatur, Fokus, `role="meter"`, Kontraste
-- [ ] Mobile 375 px
-- [ ] Sound (KANN, Web Audio, standardmäßig aus)
+- [x] **`styles.md` erneut lesen**
+- [x] Progressive Enthüllung (Protokolle nach 1. Reparatur, Mast nach ~2 min, Entropie ab 1. Reparatur)
+- [x] Erste 60 s über das Log, erste sinnvolle Aktion dezent hervorgehoben
+- [x] Mikro-Feedback je Aktion, würdevoller Verlust-Moment
+- [x] `prefers-reduced-motion` überall
+- [x] Barrierefreiheit: Tastatur, Fokus, `role="meter"`, Kontraste (`npm run contrast`)
+- [x] Mobile 375 px (Panels als Tabs, im Browser gemessen)
+- [x] Sound (KANN, Web Audio, standardmäßig aus)
 
 ### M8a · Balancing
 - [x] `npm run sim` über 200 Seeds, Median/P10/P90
@@ -1040,3 +1044,197 @@ in `balance.ts` brachen 10 `balance.spec.ts`). Sie fand zehn Mängel; alle sind 
 10. **Ort von `strategies.ts`** wurde geprüft und als vertretbar bestätigt: Nicht-Produktcode
     im Produktbaum, aber es landet nicht im Bundle, hält die Engine-Regeln ein, und
     `scripts/` wäre für einen Import aus einer Spec-Datei die falsche Richtung.
+
+
+---
+
+## 17 · Stand nach M7 (Feel & Politur)
+
+### Progressive Enthüllung
+
+Abgeleitet, nicht gespeichert: die erste Reparatur steht als `repairs` im Save, der Tick
+ebenfalls. Damit kann ein Reload nicht vergessen, was schon enthüllt war, und wer weg war,
+kommt in ein Archiv zurück, das sich an derselben Stelle seiner *eigenen* Geschichte
+geöffnet hat — nicht an derselben Stelle seiner Uhr.
+
+| Was | Wann |
+|---|---|
+| Entropie-Anzeige | mit der ersten Reparatur (vorher zeigt sie 0,0 ohne Möglichkeit, sie zu bewegen) |
+| Protokoll-Panel und -Tab | mit der ersten Reparatur |
+| Sendemast im Querschnitt | nach 120 Ticks, angekündigt durch ein Domain-Event |
+
+Der Mast meldet sich über ein echtes Engine-Event (`transmitter-online`), nicht über einen
+UI-Timer. Damit erscheint die Zeile auch dann im Log, wenn die zwei Minuten offline
+vergangen sind, und der Determinismus-Test deckt sie mit ab.
+
+**Entscheidung 31:** Wer schon etwas gesendet hat (Vermächtnis > 0) oder eine Chronik
+liest, bekommt sofort alles zu sehen. Die Enthüllung ist dazu da, ein erstes Archiv zu
+erklären; jemanden, der das Haus kennt, ein zweites Mal zu belehren, wäre herablassend.
+
+### Die erste sinnvolle Aktion
+
+Ein `suggestion`-Signal nennt genau eine Sache: vor der ersten Reparatur den Generator oder
+die Pumpen, danach — sobald der Mast antwortet — eine Sammlung zum Senden. Zwei Regeln
+halten es davon ab, ein Questmarker zu werden: es nennt **nur, was gerade bezahlbar ist**
+(im Test über einen ganzen Run geprüft), und es **verstummt endgültig**, sobald repariert
+und gesendet wurde. Markiert wird mit dem Akzent *und* dem Wort „zuerst", nie mit Farbe
+allein.
+
+### Mikro-Feedback und der Verlust-Moment
+
+Beides ohne einen einzigen Timer. Der Verlust steht mit seinem Tick schon in der Chronik,
+die Aktion braucht nur eine winzige, **nicht gespeicherte** Markierung — ein Puls, der
+einen Reload überlebt, wäre eine kleine Lüge darüber, was gerade passiert ist. Die Fenster
+(`UI_THRESHOLDS.feedbackTicks`, `lossMomentTicks`) liegen bei den anderen Zahlen in
+`balance.ts`. Nebeneffekt: wer Stunden weg war, kommt nicht in ein Interface zurück, das
+für längst vergangene Verluste aufleuchtet.
+
+### Bewegung
+
+Jede Animation und jeder Übergang im Projekt läuft über `--motion-fast` / `--motion-slow`,
+und `prefers-reduced-motion` setzt beide auf 0 ms. Geprüft per `grep`: es gibt keine
+einzige hartkodierte Dauer. Wasserstand und Balken blenden, ein Spieler, der Ruhe
+angefordert hat, bekommt den Endzustand sofort.
+
+### Barrierefreiheit — drei echte Funde
+
+1. **Akzentgrün auf Weiß erreicht 4,35:1.** Das genügt den 3:1 für Grafiken (WCAG 1.4.11),
+   aber nicht den 4,5:1 für Text (1.4.3). Meine neue Markierung „ZUERST" war grün gesetzt —
+   das war der einzige grüne Text im Projekt und ist jetzt schwarz; der Akzent trägt die
+   Markierung als Rahmen weiter. `styles.md` ist unangetastet: sie schreibt die Farbe für
+   Icons und Highlights vor, nicht fürs Lesen. Abgesichert durch `npm run contrast`, das
+   die Werte aus `tokens.css` selbst liest (12 Kombinationen, Exit-Code 1 bei Unterschreitung).
+2. **Der Fokus fiel auf `<body>`, wenn ein Bedienelement unter ihm verschwand.** Zum
+   **sechsten Mal** dasselbe Muster (M2–M6 je einmal). Mein erster Versuch war falsch und
+   der Test, der ihn bestätigte, wertlos: Ich hatte nur die Tab-Leiste bewacht — die auf
+   dem Desktop `display: none` ist — und der Test bestand allein deshalb, weil jsdom
+   Elemente in unsichtbaren Containern fokussieren lässt, ein echter Browser aber nicht.
+   Die Review hat das aufgedeckt, und mit ihr zwei weitere Wege in denselben Fehler: ein
+   Bedienelement **innerhalb** des Protokoll-Panels (so erreicht ihn ein Desktop-Spieler
+   überhaupt) und der Sendemast-Chip, den erst *dieser* Meilenstein versteckbar gemacht
+   hat. Der Wächter sitzt jetzt eine Ebene höher: Wird das Archiv ersetzt, und hält danach
+   niemand mehr den Fokus, kommt er auf den Seitentitel zurück — der jedes Archiv
+   überlebt. Drei Tests, einer je Weg, plus einer dagegen, dass der Wächter den Fokus
+   **klaut**, wenn das Bedienelement überlebt hat.
+3. **Der Fokusring wurde in der Tab-Leiste beschnitten.** `overflow-x: auto` macht die
+   Leiste auch vertikal zur Klippbox, ein 2px nach außen versetzter Ring wäre oben und
+   unten abgeschnitten worden. Er wird jetzt nach innen gezeichnet.
+
+### Mobile: im Browser gemessen, nicht behauptet
+
+Die Panels werden unter 600 px zu einer Tab-Leiste. Die Leiste entscheidet das Stylesheet,
+nicht TypeScript: oberhalb der Schwelle ist sie `display: none` und der ganze Stapel steht
+da, also gibt es keine Media Query zu beobachten und nichts zu vermessen. Eine Auswahl im
+Querschnitt öffnet automatisch das Panel, das darauf handeln kann.
+
+Gemessen bei echten 375 × 812 px:
+
+| | vorher | nachher |
+|---|---|---|
+| Ressourcenleiste | 184 px (2 Spalten, 3 Zeilen) | **104 px** (3 Spalten) |
+| Kleinstes Tippziel im Gebäude | 28 px | **40 px** |
+| Seitlicher Überlauf | keiner | keiner |
+| Namen, die aus ihrem Chip laufen | „Kustoden-Depot" | keine |
+
+40 px ist keine erfundene Zahl: `styles.md` nennt sie selbst als Größe für ein quadratisches
+Bedienelement. 28 px erfüllte zwar WCAG 2.5.8 (24 px), ist aber ein schlechtes Ziel, während
+das Wasser steigt.
+
+Der abgeschnittene Chip-Name war ein **Altfehler**, kein Rückschritt aus diesem Meilenstein:
+`.chip-name` stand in einer Flex-Spalte mit `align-items: flex-start`, wuchs also über den
+Chip hinaus, statt vom eigenen `overflow: hidden` gekürzt zu werden — der Ellipsis konnte
+nie greifen. `max-width: 100%` behebt es.
+
+**Offen und bewusst so gelassen:** der Keller liegt 119 px unter der ersten Bildschirmkante,
+man muss also ein Stück scrollen, um ihn zu sehen. Die Höhe ist inhaltsgetrieben; sie weiter
+zu drücken hieße, das eben gewonnene 40-px-Tippziel wieder zu opfern. `prompt.md` verlangt
+„gut spielbar auf 375 px", nicht „alles auf einem Bildschirm", und der Pegel steht ohnehin
+als Zahl in der Leiste.
+
+### Sound (KANN)
+
+Web Audio, im Browser erzeugt, keine Dateien, **standardmäßig aus**, Schalter in den
+Einstellungen. Gefiltertes Rauschen als Regen, ein kurzer Sinus je Log-Zeile (drei Tonhöhen
+für `note` / `loss` / `end`). Der `AUDIO_CONTEXT` liegt hinter einem Injection-Token, aus
+demselben Grund wie `GAME_STORAGE` und `FRAME_SCHEDULER`: jsdom hat kein Audiogerät. Ein
+Browser, der Audio oder Speicher verweigert, und ein Audiograph, der beim Bauen wirft, sind
+getestet — keiner davon darf einen Run mitreißen.
+
+Eine Rückkehr nach Stunden bleibt **still**: Töne gibt es nur, wenn genau *eine* Zeile
+ankam. Dutzende auf einmal erklärt die Rückkehr-Zusammenfassung, nicht eine Tonsalve.
+`Math.random` im Rauschgenerator ist zulässig — die Engine-Regel schützt die Simulation, und
+kein Save hängt an diesem Rauschen.
+
+### Zahlen
+
+344 Tests (von 323 zu Beginn des Meilensteins), Bundle 335,54 kB roh / 87,60 kB übertragen,
+Balancing unverändert (14,9 / 19,7 / 40,3 min).
+
+
+### Nachträge aus der M7-Review
+
+Die Review bestätigte Engine-Reinheit, Determinismus, das `transmitter-online`-Event, die
+Bewegungs-Tokens, den Sound und dass `styles.md` unangetastet ist. Sie fand acht Mängel,
+und der schwerste richtete sich gegen meine eigene Reparatur. Alle behoben:
+
+1. **Der Fokus-Fix war falsch, und sein Test wertlos.** Siehe oben — selbst nachgemessen
+   und bestätigt, bevor ich ihn ersetzt habe.
+2. **Die sichtbare Hälfte des Meilensteins war ungetestet.** Sieben Eingriffe ins Template
+   ließen alle 331 Tests grün: Hinweiszeile leeren, `suggested`, `pulsing`, `just-lost`
+   abschalten, das Wort „zuerst" oder „eben verloren" entfernen, die Entropie nie
+   verstecken, den Mast-Filter ausbauen. Die Store-Signale waren gut gedeckt — nur prüfte
+   nichts, dass sie auf dem Bildschirm ankommen. Jetzt tun es sechs Render-Tests, und alle
+   sieben Eingriffe schlagen fehl.
+3. **Drei Vorschlags-Tests waren vakuös.** Der Bezahlbarkeitstest reparierte nie, also ging
+   das Material nie aus; der „verstummt endgültig"-Test traf `!hasSent` nicht, weil schon
+   `transmitting !== null` das Ergebnis erzeugte; der `ended`-Test war grün, weil nach 24 h
+   ohnehin nichts mehr geht. Für den zweiten gibt es jetzt einen Test, der die Übertragung
+   **abbricht** — ein echter Zweig, denn wer es sich anders überlegt, darf nicht erneut
+   bedrängt werden.
+4. **Zwei Wächter waren tot.** `if (state.ended) return null` ist unerreichbar, weil
+   `canApply` auf einem beendeten Archiv ohnehin alles ablehnt — entfernt, die Zusicherung
+   bleibt als Test. Der Bezahlbarkeits-Wächter im **System**-Zweig ist mit den heutigen
+   Zahlen ebenfalls nicht erreichbar (wer nie repariert, gibt kein Material aus, und der
+   Akku *füllt* sich sogar, während Verbraucher ausfallen; ist eine Reparatur endlich zu
+   teuer, ist das System längst verloren und fällt schon durch die `lost`-Prüfung). Er
+   **bleibt** als Schutz gegen eine künftige Zahlenänderung — aber der Test sagt jetzt
+   ausdrücklich, dass diese Zeile *nicht* gedeckt ist, statt Deckung zu suggerieren.
+5. **Der Puls überlebte das Archiv.** `justActed` vergleicht Ticks ohne Untergrenze, und
+   `beginArchive` leerte die Markierung nicht: im nächsten Archiv pulste bei Tick 0 ein Chip,
+   den niemand berührt hatte. Behoben und getestet.
+6. **Die Rechnung hinter `--stat-column-min-compact` stimmte nicht** (genannt waren 60, der
+   Wert ist 88) und die Ableitung fehlte in der Liste oben. Beides korrigiert, jetzt als
+   Ableitung 19 geführt.
+7. **PLAN.md widersprach seinem eigenen neuen Skript:** an zwei alten Stellen stand 4,6:1
+   für Akzentgrün, `npm run contrast` rechnet 4,35:1. Nachgerechnet, die alten Stellen
+   korrigiert.
+8. **Kleinere Lücken geschlossen:** Home und End fehlten im Tab-Muster; Reihenfolge,
+   `role="tablist"` und das Label der Leiste waren durch keinen Test gehalten; der
+   Fokusring wurde beschnitten; und das Wort „zuerst" stand *innerhalb* des Chip-Namens,
+   der bei 375px gekürzt wird — es hätte wegfallen und die Markierung allein der Farbe
+   überlassen können. Es ist jetzt ein Geschwister-Element.
+
+**Die Build-Warnung.** Die Review fand eine, die dieser Meilenstein verursacht hat:
+`cross-section.css` überschritt das 4-kB-Budget für Komponenten-Styles. Gegengeprüft — vor
+M7 baute das Projekt warnungsfrei, es war also meine. Das Budget steht jetzt auf 6 kB. Das
+ist bewusst und nicht stillschweigend: der Querschnitt zeichnet ein fünfstöckiges Haus mit
+Regen, Dach, Wasserstand und sieben Zuständen je Chip plus eigenem Kompakt-Layout; 5 kB
+minifiziert sind dafür angemessen, und die Fehlergrenze von 8 kB bleibt als echte Decke.
+
+**Zwei Punkte bewusst offen gelassen**, beide in der Review benannt:
+
+- **`role="tabpanel"` auch auf dem Desktop.** Oberhalb 600px ist die Leiste `display: none`,
+  die Panels tragen die Rolle aber weiter. ARIA 1.2 verlangt für `tabpanel` keinen
+  Pflichtkontext, es ist also gültig, aber ein Screenreader meldet sechs Tab-Panels ohne
+  zugehöriges Tab-Set. Es sauber zu lösen hieße, die Rolle an die Fensterbreite zu koppeln
+  — also genau die JavaScript-Breitenmessung einzuführen, die dieses Layout bewusst
+  vermeidet. Der Preis wäre höher als der Gewinn; hier steht, warum.
+- **Der Keller liegt 119px unter der ersten Bildschirmkante** (siehe oben).
+
+Und eine **bewusste Abweichung von Abschnitt 7**, die bisher nicht dokumentiert war: dort
+steht „Anfangs nur Querschnitt, Energie, Material und die wichtigsten Systeme". Pegel und
+Laufzeit stehen von Anfang an in der Leiste. Der Pegel ist die zentrale Bedrohung und im
+Querschnitt ohnehin zu sehen — ihn als Zahl zu verstecken, während das Wasser sichtbar
+steigt, wäre Geheimniskrämerei statt Behutsamkeit; und eine Laufzeit erst später
+einzublenden würde einen Run unvergleichbar machen. Versteckt wird, was ohne Handlung
+bedeutungslos ist: die Entropie.
