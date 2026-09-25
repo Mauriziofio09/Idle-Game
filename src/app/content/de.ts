@@ -146,15 +146,20 @@ export const HINTS = {
  * the panels keep their full titles once open.
  */
 export const PANEL_TABS = {
+  chronicle: 'Chronik',
   detail: 'Auswahl',
+  log: 'Archivlog',
   protocols: 'Protokolle',
   legacy: 'Vermächtnis',
   scenarios: 'Archive',
   settings: 'Einstellungen',
 } as const;
 
-/** Names the tab strip for screen readers, since the tabs themselves are single words. */
+/** Names the rail for screen readers, since the tabs themselves are single words. */
 export const PANEL_TABS_LABEL = 'Panels';
+
+/** Spoken form of the unread count on the log tab. */
+export const PANEL_TABS_UNREAD = (count: string) => `${count} ungelesene Einträge`;
 
 /**
  * Die Einführung beim ersten Start.

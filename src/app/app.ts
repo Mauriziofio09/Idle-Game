@@ -19,6 +19,7 @@ import {
   END_LABELS,
   PANEL_TABS,
   PANEL_TABS_LABEL,
+  PANEL_TABS_UNREAD,
   PANEL_TITLES,
   SETTINGS_LABELS,
   STARTUP_NOTICES,
@@ -54,7 +55,22 @@ import { Icon } from './ui/kit/icon';
 import { IconBox } from './ui/kit/icon-box';
 
 /** The panels that share the strip on a phone. */
-type PanelId = 'detail' | 'protocols' | 'legacy' | 'scenarios' | 'settings';
+type PanelId =
+  | 'detail'
+  | 'log'
+  | 'protocols'
+  | 'legacy'
+  | 'scenarios'
+  | 'settings'
+  | 'chronicle';
+
+interface PanelTab {
+  readonly id: PanelId;
+  /** Shown on the rail. */
+  readonly label: string;
+  /** Lines nobody has read yet, on the log. Absent everywhere else. */
+  readonly badge?: number;
+}
 
 @Component({
   selector: 'app-root',
@@ -140,18 +156,35 @@ export class App implements OnInit {
   protected readonly revealed = this.store.revealed;
 
   /**
-   * The panel strip. prompt.md section 7 asks for the panels to become tabs on a phone
-   * and for the archive to stay playable at 375 px.
+   * The rail: one tab per panel, everything the right-hand side can show.
    *
-   * Which panel is open is tracked here at all times, but only matters on a narrow
-   * screen: the stylesheet shows the whole stack above the phone breakpoint and hides
-   * the strip entirely, so there is no media query to listen to and nothing to measure.
-   * The layout decides, the component only remembers.
+   * It runs down the side on a wide screen and across the top on a phone. Vertical is
+   * what makes "a tab for every panel" work at all — a horizontal strip either wraps into
+   * rows that push the archive down or hides the last tabs behind a sideways scroll, and
+   * both of those were tried first.
+   *
+   * The cross-section is deliberately not a tab. It is the game; everything here is
+   * something you consult about it.
    */
   protected readonly tabsLabel = PANEL_TABS_LABEL;
 
-  protected readonly tabs = computed(() => {
-    const tabs: { id: PanelId; label: string }[] = [{ id: 'detail', label: PANEL_TABS.detail }];
+  /**
+   * Log lines that have arrived while the player was looking at something else.
+   * Starts below the first id, which is zero — at zero the opening line counts as read.
+   */
+  private readonly seenLogId = signal(-1);
+
+  protected readonly unreadLog = computed(() => {
+    const log = this.store.log();
+    const seen = this.seenLogId();
+    return log.filter((entry) => entry.id > seen).length;
+  });
+
+  protected readonly tabs = computed<PanelTab[]>(() => {
+    const tabs: PanelTab[] = [
+      { id: 'detail', label: PANEL_TABS.detail },
+      { id: 'log', label: PANEL_TABS.log, badge: this.unreadLog() },
+    ];
     // The protocols tab appears with the panel it opens, not before.
     if (this.revealed().protocols) {
       tabs.push({ id: 'protocols', label: PANEL_TABS.protocols });
@@ -161,11 +194,16 @@ export class App implements OnInit {
       { id: 'scenarios', label: PANEL_TABS.scenarios },
       { id: 'settings', label: PANEL_TABS.settings },
     );
+    // The chronicle only exists once there is a run to look back on, and then it is the
+    // point of the whole thing — so it goes first rather than last.
+    if (this.ended()) {
+      tabs.unshift({ id: 'chronicle', label: PANEL_TABS.chronicle });
+    }
     return tabs;
   });
 
   /** Falls back to the selection panel whenever the open tab stops existing. */
-  protected readonly activePanel = linkedSignal<{ id: PanelId; label: string }[], PanelId>({
+  protected readonly activePanel = linkedSignal<PanelTab[], PanelId>({
     source: () => this.tabs(),
     computation: (tabs, previous) =>
       previous !== undefined && tabs.some((tab) => tab.id === previous.value)
@@ -173,17 +211,57 @@ export class App implements OnInit {
         : 'detail',
   });
 
+  /**
+   * The rail follows whatever the archive has just made important.
+   *
+   * Both of these react to a *change*, not to a state. An effect that simply asked "has
+   * the run ended?" would fight the one below on every render of an already finished
+   * archive, and which of them won would come down to the order they happen to run in.
+   */
+  private wasEnded = this.store.ended();
+
+  protected readonly openChronicleAtTheEnd = effect(() => {
+    const ended = this.store.ended();
+    const justEnded = ended && !this.wasEnded;
+    this.wasEnded = ended;
+    if (justEnded) {
+      this.activePanel.set('chronicle');
+    }
+  });
+
+  protected readonly markLogRead = effect(() => {
+    if (this.activePanel() !== 'log') {
+      return;
+    }
+    const newest = this.store.log()[0];
+    if (newest !== undefined) {
+      this.seenLogId.set(newest.id);
+    }
+  });
+
+  protected unreadLabel(count: number): string {
+    return PANEL_TABS_UNREAD(String(count));
+  }
+
   protected selectPanel(id: PanelId): void {
     this.activePanel.set(id);
   }
 
   /**
-   * Picking something in the building opens the panel that can act on it. On a phone the
-   * detail panel sits behind a tab, and a cross-section whose taps quietly changed an
-   * off-screen panel would feel dead.
+   * Picking something in the building opens the panel that can act on it. A cross-section
+   * whose clicks quietly changed a panel behind another tab would feel dead.
+   *
+   * Only on a genuine change: on the first render of a finished archive this would
+   * otherwise pull the rail away from the chronicle, which is the one thing that run has
+   * left to say.
    */
+  private lastSelection = this.store.selection();
+
   protected readonly followSelection = effect(() => {
-    if (this.store.selection() !== null) {
+    const selection = this.store.selection();
+    const changed = selection !== this.lastSelection;
+    this.lastSelection = selection;
+    if (changed && selection !== null) {
       this.activePanel.set('detail');
     }
   });

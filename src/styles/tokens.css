@@ -98,6 +98,14 @@
   --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
   /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
   --stat-column-min: 96px;
+  /* DERIVED 24 — the right-hand side now holds the rail and a panel side by side:
+     --rail-width + --space-4 + --panel-column-min = 176 + 16 + 320 = 512, rounded up. */
+  --side-column-min: 520px;
+
+  /* DERIVED 23 — the vertical rail. Wide enough for "EINSTELLUNGEN" at the label size
+     with its letter-spacing, plus the padding either side: 11 x --space-4. */
+  --rail-width: 176px;
+
   /* DERIVED 20 — styles.md knows no overlay, because it describes a page and not a
      dialog. Built from the border black at two thirds, so the archive stays legible
      behind the introduction instead of being replaced by it. No blur: "depth comes from

@@ -4,6 +4,7 @@ import {
   ACTION_LABELS,
   APP,
   LOG,
+  PANEL_TABS,
   RESOURCE_LABELS,
   SYSTEM_NAMES,
   TUTORIAL,
@@ -44,6 +45,12 @@ async function openArchive(page: Page) {
   await expect(introduction).toBeHidden();
 }
 
+/** Opens the archive log, which lives behind its own tab on the rail. */
+async function openLog(page: Page) {
+  await page.getByRole('tab', { name: PANEL_TABS.log }).click();
+  await expect(page.getByRole('log')).toBeVisible();
+}
+
 /** A figure from the top bar, by its label. */
 function stat(page: Page, label: string) {
   return page.locator('app-resource-bar app-stat').filter({ hasText: label });
@@ -81,6 +88,7 @@ test('the archive opens, and says where it is', async ({ page, baseURL }) => {
 
   // Its own seed, and the three lines that explain the situation.
   await expect(page.getByText(APP.archivePrefix)).toBeVisible();
+  await openLog(page);
   for (const line of LOG.opening) {
     await expect(page.getByRole('log')).toContainText(line);
   }
@@ -130,6 +138,7 @@ test('repairing a system raises it, costs something and is written to the log', 
   // It was paid for.
   await expect(stat(page, RESOURCE_LABELS.material)).not.toHaveText(materialBefore);
   // The archive said so.
+  await openLog(page);
   await expect(page.getByRole('log')).toContainText('repariert');
   // And the entropy readout, which a repair is what pays into, has appeared.
   await expect(stat(page, RESOURCE_LABELS.entropy)).toBeVisible();
@@ -138,6 +147,7 @@ test('repairing a system raises it, costs something and is written to the log', 
 test('the archive is still there after a reload', async ({ page }) => {
   await openArchive(page);
   await repairPumps(page);
+  await openLog(page);
   await expect(page.getByRole('log')).toContainText('repariert');
 
   const seed = await page.getByText(APP.archivePrefix).innerText();

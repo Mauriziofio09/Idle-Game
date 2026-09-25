@@ -176,6 +176,10 @@ Custom Property lesen) ·
 `--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten ·
 `--field-number-width` 5,5em für ein Zahlenfeld mit vier Stellen plus Einheit ·
 `--checkbox-size` = `--space-4` für das Kästchen ·
+**23** (M9) `--rail-width` 176px (= 11 × `--space-4`) — breit genug für „EINSTELLUNGEN"
+in Label-Größe samt Sperrung und Innenabstand ·
+**24** (M9) `--side-column-min` 520px (= `--rail-width` + `--space-4` + `--panel-column-min`)
+— die rechte Seite hält Schiene und Panel nebeneinander ·
 **20** (M9) `--color-overlay` `rgb(0 0 0 / 0.66)` — `styles.md` kennt keine Overlay-Farbe,
 weil sie eine Seite beschreibt und keinen Dialog. Aus dem Rahmen-Schwarz zu zwei Dritteln,
 damit das Archiv hinter der Einführung lesbar bleibt statt ersetzt zu werden. Kein Weichzeichner:
@@ -1438,6 +1442,36 @@ Die Panel-Spalte war **fünfmal so hoch wie der Querschnitt**, um den das ganze 
 Archive 678, Einstellungen 502, Vermächtnis 458, Protokolle 367, Log 216, Auswahl 124 —
 alle untereinander. Man scrollte an vier Bildschirmen Verwaltung vorbei, um das Haus zu
 sehen.
+
+### Zweiter Anlauf: eine Schiene statt einer Leiste
+
+Die waagerechte Leiste war der erste Versuch und nicht gut genug. Sie brach auf dem
+Desktop in zwei Zeilen um, und bei 896px — knapp unter der Schwelle — lagen vier von
+sieben Reitern hinter einem Seitwärts-Scroll, den dort niemand vermutet.
+
+Jetzt läuft sie **senkrecht an der Seite**, sobald Platz ist. Das ist die einzige
+Anordnung, die sieben Reiter trägt, ohne zu umbrechen oder etwas zu verstecken, und es ist
+die aufklappbare Sidebar, die gewünscht war. Drei Stufen:
+
+| Breite | Form |
+|---|---|
+| bis 599 px | waagerecht, einzeilig, scrollt seitwärts — eine dreizeilige Leiste würde das Archiv vom Telefon schieben |
+| 600–899 px | waagerecht, umbrechend — dort ist senkrecht Platz und es gibt keinen Grund, etwas zu verstecken |
+| ab 900 px | senkrechte Schiene, klebt beim Scrollen mit |
+
+**Jeder Block hat jetzt seinen Reiter**, auch die beiden, die vorher außen standen:
+
+- **Das Archivlog** bekommt einen — mit einer **Zahl darauf**, wie viele Zeilen
+  angekommen sind, während man woanders hinsah. Eine Zahl und kein farbiger Punkt, weil
+  „drei" und „vierzig" verschiedene Lagen sind. Wer das Log öffnet, setzt sie zurück.
+- **Die Chronik** bekommt einen und verschwindet damit vom Seitenanfang. Sie hatte 587px
+  über allem gethront; jetzt öffnet die Schiene sie **von selbst, sobald der Run endet** —
+  das ist das Einzige, was ein beendetes Archiv noch zu sagen hat.
+
+Dabei ist ein echter Fehler aufgefallen: zwei Effekte stritten sich beim Laden eines
+beendeten Runs. Der eine wollte die Chronik öffnen, der andere sprang auf „Auswahl", weil
+eine Auswahl bestand — und wer gewann, hing an der Reihenfolge, in der sie zufällig liefen.
+Beide reagieren jetzt auf **Veränderungen** statt auf Zustände.
 
 ### Die Lösung war schon da
 

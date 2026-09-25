@@ -97,23 +97,29 @@ describe('App', () => {
       expect(element.querySelector('#tab-detail')?.getAttribute('aria-selected')).toBe('true');
     });
 
-    it('keeps the archive log out of the strip and on the screen', async () => {
-      // The log is what the archive is telling you while you play. Putting it behind a
-      // tab would mean choosing between acting and hearing what the action did, so it
-      // sits below the strip at every width and has no tab of its own.
+    it('gives the archive log a tab, and counts what arrived while you looked away', async () => {
       const fixture = TestBed.createComponent(App);
+      const store = TestBed.inject(GameStore);
       await fixture.whenStable();
       const element = fixture.nativeElement as HTMLElement;
 
-      expect(element.querySelector('#tab-log')).toBeNull();
-      const log = element.querySelector('[role="log"]');
-      expect(log).toBeTruthy();
-      expect(element.querySelector('.log')?.contains(log!)).toBe(true);
+      const logTab = () => element.querySelector<HTMLElement>('#tab-log');
+      const badge = () => logTab()?.querySelector('.tab-badge')?.textContent?.trim();
+      expect(logTab()).toBeTruthy();
 
-      // And it stays there whichever panel is open.
-      element.querySelector<HTMLButtonElement>('#tab-settings')?.click();
+      // The opening lines are unread until somebody opens the log.
+      expect(badge()).toBe(String(store.log().length));
+
+      logTab()?.click();
       await fixture.whenStable();
       expect(element.querySelector('[role="log"]')).toBeTruthy();
+      expect(badge()).toBeUndefined();
+
+      // Leave the log, let something happen, and the count comes back.
+      element.querySelector<HTMLButtonElement>('#tab-settings')?.click();
+      store.dispatch({ type: 'repair', systemId: 'generator' });
+      await fixture.whenStable();
+      expect(badge()).toBeTruthy();
     });
 
     it('is a real tab strip, named, and in the order the game is played in', async () => {
@@ -132,6 +138,7 @@ describe('App', () => {
       await fixture.whenStable();
       expect([...element.querySelectorAll('[role="tab"]')].map((tab) => tab.id)).toEqual([
         'tab-detail',
+        'tab-log',
         'tab-protocols',
         'tab-legacy',
         'tab-scenarios',
@@ -387,6 +394,24 @@ describe('App', () => {
       expect(settled?.classList.contains('just-lost')).toBe(false);
       expect(settled?.textContent).toContain(STATE_LABELS.lost);
     });
+  });
+
+  it('puts the chronicle in front of the player the moment the run ends', async () => {
+    // The end of a run is the one thing the archive has left to say, so the rail goes
+    // there by itself rather than leaving a tab for somebody to notice.
+    const fixture = TestBed.createComponent(App);
+    const store = TestBed.inject(GameStore);
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelector('#tab-chronicle')).toBeNull();
+
+    store.advance(24 * 60 * 60);
+    await fixture.whenStable();
+
+    expect(store.state().ended).toBe(true);
+    expect(element.querySelector('#tab-chronicle')?.getAttribute('aria-selected')).toBe('true');
+    expect(element.querySelector('app-chronicle')).toBeTruthy();
   });
 
   it('opens the log with the situation', async () => {

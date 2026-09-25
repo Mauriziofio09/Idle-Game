@@ -33,12 +33,6 @@
     </app-card>
   }
 
-  @if (ended()) {
-    <app-card class="ending">
-      <app-chronicle (restarted)="onRestarted()" />
-    </app-card>
-  }
-
   <div class="stage">
     <app-card class="section">
       <app-cross-section />
@@ -64,12 +58,30 @@
           (click)="selectPanel(tab.id)"
           (keydown)="onTabKeys($event, i)"
         >
-          {{ tab.label }}
+          <span class="tab-label">{{ tab.label }}</span>
+          @if (tab.badge) {
+            <!-- A number, not a coloured dot: it says how much you have missed. -->
+            <span class="tab-badge" [attr.aria-label]="unreadLabel(tab.badge)">{{ tab.badge }}</span>
+          }
         </button>
       }
     </div>
 
     <div class="panels">
+      @if (ended()) {
+        <div
+          id="panel-chronicle"
+          class="panel"
+          role="tabpanel"
+          aria-labelledby="tab-chronicle"
+          [class.active]="activePanel() === 'chronicle'"
+        >
+          <app-card class="ending">
+            <app-chronicle (restarted)="onRestarted()" />
+          </app-card>
+        </div>
+      }
+
       <div
         id="panel-detail"
         class="panel"
@@ -121,6 +133,18 @@
       </div>
 
       <div
+        id="panel-log"
+        class="panel"
+        role="tabpanel"
+        aria-labelledby="tab-log"
+        [class.active]="activePanel() === 'log'"
+      >
+        <app-card [label]="titles.log">
+          <app-archive-log />
+        </app-card>
+      </div>
+
+      <div
         id="panel-settings"
         class="panel"
         role="tabpanel"
@@ -133,14 +157,6 @@
       </div>
     </div>
 
-    <!--
-      The log sits outside the strip on purpose: it is what the archive is telling you
-      while you play, and hiding it behind a tab would mean choosing between acting and
-      hearing what your action did.
-    -->
-    <app-card class="log" [label]="titles.log">
-      <app-archive-log />
-    </app-card>
     </div>
   </div>
 </main>

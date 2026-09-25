@@ -54,7 +54,7 @@ h1 {
   z-index: 1;
 }
 
-/* The right-hand column: the strip, the panel it opens, and the log underneath. */
+/* The right-hand side: the rail, and whichever panel it has open. */
 .side {
   display: flex;
   flex-direction: column;
@@ -62,8 +62,15 @@ h1 {
   min-width: 0;
 }
 
-.log {
-  min-width: 0;
+@media (min-width: 900px) {
+  /* Rail beside panel rather than above it. --rail-width holds the longest label,
+     "Einstellungen", without wrapping. */
+  .side {
+    display: grid;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
 }
 
 .ending h2 {
@@ -88,7 +95,9 @@ h1 {
 
   .stage {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(var(--panel-column-min), 1fr);
+    /* The cross-section keeps the larger share; the right-hand side gets what the rail
+       and a panel need beside each other. */
+    grid-template-columns: minmax(0, 1.1fr) minmax(var(--side-column-min), 1fr);
     align-items: start;
   }
 }
@@ -115,51 +124,31 @@ h1 {
   cursor: pointer;
 }
 
-/* ------------------------------------------------------------- The panel strip
-   prompt.md section 7 asks for the panels to become tabs on a phone. They are tabs at
-   every width now, and the reason is a measurement rather than a preference: stacked on
-   a desktop the six panels came to 2464 px beside a 475 px cross-section, so the page ran
-   to four screens and the building the game is about was the smallest thing on it.
+/* ----------------------------------------------------------------- The rail
+   One tab per panel: selection, log, protocols, legacy, archives, settings, and the
+   chronicle once there is a run to look back on.
 
-   The shape language is untouched — the same 2px borders, no radius, no shadow, and the
-   open tab inverts exactly as a selected chip in the cross-section does. */
+   Vertical on a wide screen, because that is the only arrangement that takes seven tabs
+   without either wrapping into rows that push the archive down or hiding the last ones
+   behind a sideways scroll — both were tried first. Across the top on a phone, where
+   there is no width to give away.
+
+   Nothing new in the shape language: a bordered box, hairline dividers, and the open tab
+   inverts exactly as a selected chip in the cross-section does. */
 .tabs {
   display: flex;
-  gap: 0;
-  /* On a phone the labels must not wrap: a strip growing to three rows pushes the archive
-     down, which is the problem this arrangement exists to solve. It scrolls sideways
-     instead, and the wider screen below gets the opposite treatment. */
-  overflow-x: auto;
   border: var(--border);
 }
 
-@media (min-width: 600px) {
-  /* With room to spare, a hidden tab is worse than a second row: wrapping costs about
-     forty pixels once, while a sideways scrollbar hides "Einstellungen" behind a gesture
-     nobody expects on a desktop. */
-  .tabs {
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
-
-  /* Wrapped rows need a divider above them, or the second row floats free of the first. */
-  .tab {
-    border-bottom: var(--border-hairline);
-  }
-
-  .tab:last-child {
-    border-right: none;
-  }
-}
-
 .tab {
-  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   background: var(--color-background);
   color: var(--color-text-primary);
   border: none;
-  /* Structural dividers, in keeping with borders being the design. */
-  border-right: var(--border-hairline);
   border-radius: var(--radius);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-label);
@@ -168,25 +157,100 @@ h1 {
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
 }
 
-.tab:last-child {
-  border-right: none;
+.tab:hover:not(.active) {
+  background: var(--color-surface-subtle);
 }
 
-/* The strip scrolls sideways, which makes it a clipping box in both directions, so an
-   outline drawn 2px outside a tab would be cut off at the top and bottom edges. Drawing
-   it inside keeps the focus visible, which prompt.md section 7 requires. */
-.tab:focus-visible {
-  outline-offset: calc(-1 * var(--focus-outline-offset));
-}
-
-/* The open tab inverts, the same way a selected chip does. Not colour alone:
-   aria-selected carries it for assistive technology, and the panel below is
-   the visible answer either way. */
+/* The open tab inverts. Never colour alone: aria-selected carries it for assistive
+   technology, and the panel beside it is the visible answer either way. */
 .tab.active {
   background: var(--color-button-primary-bg);
   color: var(--color-button-primary-fg);
+}
+
+/* How many lines have arrived while you were looking at something else. A number rather
+   than a dot, because "three" and "forty" are different situations. */
+.tab-badge {
+  min-width: var(--space-5);
+  padding: 0 var(--space-1);
+  background: var(--color-button-primary-bg);
+  color: var(--color-button-primary-fg);
+  border-radius: var(--radius);
+  font-size: var(--font-size-label);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.tab.active .tab-badge {
+  background: var(--color-button-primary-fg);
+  color: var(--color-button-primary-bg);
+}
+
+/* Below the rail width the tabs run across the top, and there are two cases.
+
+   On a phone they must not wrap: a strip three rows deep pushes the archive off the
+   screen, which is the whole problem this arrangement exists to solve, so it scrolls
+   sideways instead.
+
+   Between a phone and the rail there is vertical room to spare and no reason to hide four
+   tabs behind a gesture — measured at 896px, "Protokolle" through "Einstellungen" were all
+   off the edge. There they wrap. */
+@media (max-width: 899px) {
+  .tabs {
+    overflow-x: auto;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    border-right: var(--border-hairline);
+  }
+
+  .tab:last-child {
+    border-right: none;
+  }
+
+  /* The strip is a clipping box in both directions, so an outline drawn outside a tab
+     would be cut off top and bottom. Drawing it inside keeps the focus visible. */
+  .tab:focus-visible {
+    outline-offset: calc(-1 * var(--focus-outline-offset));
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  /* Wrapped rows need a line above them, or the second row floats free of the first. */
+  .tab {
+    border-bottom: var(--border-hairline);
+  }
+}
+
+/* A wide screen: down the side, each tab the full width of the rail. */
+@media (min-width: 900px) {
+  .tabs {
+    flex-direction: column;
+    align-self: start;
+    /* Stays in view while a long panel scrolls past it. The resource bar is 2px of
+       border plus its own height; --space-8 clears it without measuring. */
+    position: sticky;
+    top: var(--space-8);
+  }
+
+  .tab {
+    justify-content: space-between;
+    text-align: left;
+    border-bottom: var(--border-hairline);
+  }
+
+  .tab:last-child {
+    border-bottom: none;
+  }
 }
 
 .panel {
