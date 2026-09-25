@@ -45,6 +45,9 @@ __screenshots__/
 /blob-report
 /playwright/.cache
 
+# Persönliche Notizen, die nicht ins Repository gehören
+SPIELANLEITUNG.md
+
 # System files
 .DS_Store
 Thumbs.db
