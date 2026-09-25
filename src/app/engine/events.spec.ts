@@ -240,7 +240,18 @@ describe('what the events do', () => {
     expect(state.effects.inflowFactor).toBe(1);
   });
 
-  it('rolls at the documented rate per minute', () => {
+  /**
+   * The sample size is the point of this one, so it gets time instead of being shrunk.
+   *
+   * Twenty thousand minutes is 1.2 million rolls, which puts the expected count at 1600
+   * and the ten percent band four standard deviations wide — a rate that had drifted
+   * could not hide in it. The loop itself is quick (about 250 ms standalone), but inside
+   * the Angular test environment the same work takes the best part of ten seconds, and on
+   * a CI runner three times slower than a laptop it ran into the five second default and
+   * failed a green build. The timeout is on this test alone, so a genuine hang anywhere
+   * else still fails fast.
+   */
+  it('rolls at the documented rate per minute', { timeout: 60_000 }, () => {
     // 0.08 x m(S) per minute, and at zero entropy m(S) is exactly 1.
     //
     // An announced event shows up twice in the sample — once as the warning, once as

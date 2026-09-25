@@ -1369,3 +1369,34 @@ ist. Sieben Mängel, alle behoben:
 Offen gelassen: **CI läuft auf Node 24, lokal ist Node 26 installiert.** Angular 22
 unterstützt 24 offiziell; die Version im Workflow bleibt deshalb die unterstützte, nicht
 die lokale.
+
+### Der erste CI-Lauf war rot — an der Laufzeit, nicht an der Logik
+
+Der Push löste `ci.yml` aus, und der Schritt „Unit tests" fiel. Zwei Tests liefen in die
+Vitest-Standardgrenze von 5 Sekunden: 8,6 s und 8,7 s auf einem Runner, der rund dreimal
+langsamer ist als dieser Rechner. Lokal waren beide grün — deshalb war es nicht zu sehen.
+
+Ausgeschlossen, bevor ich die Ursache hatte: Dateistand (frischer Klon plus `npm ci` →
+344/344), Zeitzone (`TZ=UTC` → grün), Locale (die Formatierer nutzen ein festes), und ein
+auf Node 24 vorhandenes `localStorage` (nachgestellt → grün). Die Protokolle waren über die
+API nur mit Admin-Rechten lesbar; die Fehlermeldung kam am Ende aus dem Browser.
+
+**Einer der beiden war frisch von mir verursacht.** `balance.spec.ts` prüft seit der
+M8b-Korrektur 200 statt 60 Seeds, und der Entropie-Test spielte alle 200 Läufe ein
+**zweites** Mal durch, obwohl `measure(playWell)` sie gerade gespielt hatte; der Sende-Test
+machte einen fünften Durchlauf. Beide im Testkörper, also gegen dessen Zeitgrenze. Jetzt
+liefert `measure` alle Kennzahlen aus *einem* Durchlauf je Strategie, und nichts rechnet
+mehr im Testkörper: die Datei fiel von 2,73 s auf 1,94 s, die Tests selbst auf 13 ms.
+
+Der zweite ist der Ereignisraten-Test mit 1,2 Millionen Würfen. Ein Versuch, ihn durch
+Wiederverwenden eines Zustands über `cloneState` zu beschleunigen, machte ihn **langsamer**
+— gemessen: `createInitialState` 39 ms, `cloneState` 57 ms je 200 000 Aufrufe. Zurückgenommen.
+Die Schleife selbst braucht standalone rund 250 ms für 1,2 Millionen Ticks; in der
+Angular-Testumgebung kostet dieselbe Arbeit das Dreißigfache. Der Stichprobenumfang ist bei
+diesem Test der Zweck — 1600 erwartete Würfe, das 10-%-Band vier Standardabweichungen breit
+— also bekommt er Zeit statt einer kleineren Stichprobe: eine eigene Grenze von 60 s, nur
+auf diesem Test, damit ein echtes Hängen anderswo weiterhin schnell auffällt.
+
+Lehre fürs Protokoll: **eine Zeitgrenze ist eine Zusicherung über die langsamste Maschine,
+die den Test ausführt, nicht über die schnellste.** Der nächstlangsamste Test liegt bei
+925 ms auf CI; dazwischen ist genug Luft.

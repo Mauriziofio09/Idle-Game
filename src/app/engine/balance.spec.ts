@@ -48,6 +48,9 @@ const TICKS_PER_MINUTE = 60;
 interface Outcome {
   readonly minutes: number;
   readonly saved: number;
+  readonly entropy: number;
+  /** What entropy would have reached on time alone, with nobody repairing anything. */
+  readonly passiveEntropy: number;
 }
 
 function play(seed: string, decide: Strategy, maxTicks = TARGETS.maxRunTicks): Outcome {
@@ -59,7 +62,12 @@ function play(seed: string, decide: Strategy, maxTicks = TARGETS.maxRunTicks): O
     }
     state = step(state).state;
   }
-  return { minutes: state.tick / TICKS_PER_MINUTE, saved: savedShare(state) };
+  return {
+    minutes: state.tick / TICKS_PER_MINUTE,
+    saved: savedShare(state),
+    entropy: state.entropy,
+    passiveEntropy: ENTROPY.passivePerSecond * state.tick,
+  };
 }
 
 /** Presses send once and then watches. The smallest thing a player can actually do. */
@@ -94,11 +102,27 @@ function median(values: readonly number[]): number {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
-function measure(decide: Strategy): { minutes: number; saved: number; allEnded: boolean } {
+/**
+ * Plays one strategy over every seed and returns the medians.
+ *
+ * Every figure a test below needs comes out of this one pass. That is not tidiness: each
+ * pass is two hundred whole runs, and a test that started its own found the five second
+ * limit on a CI runner three times slower than a laptop. The measurements belong to the
+ * suite, not to individual tests.
+ */
+function measure(decide: Strategy): {
+  minutes: number;
+  saved: number;
+  entropy: number;
+  passiveEntropy: number;
+  allEnded: boolean;
+} {
   const outcomes = SEEDS.map((seed) => play(seed, decide));
   return {
     minutes: median(outcomes.map((o) => o.minutes)),
     saved: median(outcomes.map((o) => o.saved)),
+    entropy: median(outcomes.map((o) => o.entropy)),
+    passiveEntropy: median(outcomes.map((o) => o.passiveEntropy)),
     allEnded: outcomes.every((o) => o.minutes * TICKS_PER_MINUTE < TARGETS.maxRunTicks),
   };
 }
@@ -107,6 +131,7 @@ describe('balancing targets (prompt.md section 6)', () => {
   const idle = measure(doNothing);
   const naive = measure(patchTheWorst);
   const good = measure(playWell);
+  const sendOnly = measure(pressSendAndWait);
 
   it('lets an archive nobody tends fall within a quarter of an hour', () => {
     expect(idle.minutes).toBeGreaterThanOrEqual(TARGETS.runtimeMinutes.idle.min);
@@ -120,8 +145,6 @@ describe('balancing targets (prompt.md section 6)', () => {
     // alone gets a twentieth of the collection out before the house goes quiet — while
     // still being no substitute for tending the place.
     expect(idle.saved).toBeLessThanOrEqual(TARGETS.savedShare.idle.max);
-
-    const sendOnly = measure(pressSendAndWait);
     expect(sendOnly.saved).toBeGreaterThan(0.05);
     expect(sendOnly.saved).toBeLessThan(good.saved);
   });
@@ -159,15 +182,9 @@ describe('balancing targets (prompt.md section 6)', () => {
     // pays in entropy, which never falls. ENTROPY.perRepair could be set to zero without
     // a single failure in this file until this test existed — the one number that carries
     // the premise was the one number nothing guarded.
-    const outcomes = SEEDS.map((seed) => {
-      const state = playToEnd(seed, playWell);
-      return { entropy: state.entropy, passive: ENTROPY.passivePerSecond * state.tick };
-    });
-    const entropy = median(outcomes.map((o) => o.entropy));
-    const passive = median(outcomes.map((o) => o.passive));
-
-    // With a free repair the two would be equal. They are not close.
-    expect(entropy).toBeGreaterThan(passive * 2);
+    // Read off the same pass that measured good play, rather than replaying all two
+    // hundred runs a second time. With a free repair the two figures would be equal.
+    expect(good.entropy).toBeGreaterThan(good.passiveEntropy * 2);
   });
 
   it('ends every run, whoever is playing', () => {
