@@ -10,11 +10,22 @@ import {
   SYSTEM_NAMES,
 } from './content/de';
 import { GameStore } from './game/game-store';
+import { GAME_STORAGE, memoryStorage } from './game/storage';
 import { Sound } from './game/sound';
 
 describe('App', () => {
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [App] }).compileComponents();
+    // Its own storage, fresh for every test.
+    //
+    // This was the one spec in the project using the real browserStorage(), and it passed
+    // only because the Node it was written on ships no localStorage. Where one exists —
+    // the CI runner — the finished archive from the chronicle test was still in storage
+    // when the next test loaded, which found the pumps already lost and no actions to
+    // show. A test that depends on the platform lacking a feature is not a test.
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: GAME_STORAGE, useValue: memoryStorage() }],
+    }).compileComponents();
   });
 
   it('shows the archive and its seed', async () => {
@@ -190,7 +201,10 @@ describe('App', () => {
       TestBed.resetTestingModule();
       await TestBed.configureTestingModule({
         imports: [App],
-        providers: [{ provide: Sound, useValue: sound.stub }],
+        providers: [
+          { provide: Sound, useValue: sound.stub },
+          { provide: GAME_STORAGE, useValue: memoryStorage() },
+        ],
       }).compileComponents();
 
       const fixture = TestBed.createComponent(App);

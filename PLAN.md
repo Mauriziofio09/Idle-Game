@@ -1519,3 +1519,26 @@ dass die Einführung erscheint, sich durchblättern lässt und nach einem Reload
 wiederkommt.
 
 352 Unit-Tests, 4 Smoke-Tests, Bundle 344,08 kB roh / 89,54 kB übertragen.
+
+### Nachtrag: ein Test, der nur bestand, weil die Plattform etwas nicht konnte
+
+Der erste CI-Lauf nach der Schiene fiel an einer Stelle, die lokal grün war: Das
+Detail-Panel sollte die Kosten einer Reparatur zeigen, fand die Pumpen aber **verloren**
+vor. Es lud also ein bereits totes Archiv.
+
+`app.spec.ts` war die einzige Spec im Projekt, die die **echte** `browserStorage()`
+benutzte statt einer eigenen. Auf dem Entwicklungsrechner gibt es unter Node kein
+`localStorage`, also blieb das folgenlos — und in der M7-Review hatte ich genau diese
+Vermutung geprüft und verworfen, weil damals kein Test einen Spielstand *schrieb*. Der neue
+Chronik-Test tut es: er spult 24 Stunden vor, der Run endet, und wo `localStorage`
+existiert — auf dem Runner — stand dieser beendete Stand noch im Speicher, als der nächste
+Test lud.
+
+Reproduziert, indem dem Testlauf ein funktionierendes `localStorage` untergeschoben wurde;
+danach fiel derselbe Test auch hier. Die Reparatur ist eine Zeile — eine eigene
+Speicherung je Test, wie sie jede andere Spec längst hatte — und wurde unter **beiden**
+Bedingungen geprüft, mit und ohne `localStorage`.
+
+Die Lehre ist allgemeiner als der Fehler: **ein Test, der davon abhängt, dass die Plattform
+etwas *nicht* kann, ist kein Test.** Nachgezählt: alle 36 `configureTestingModule`-Stellen
+im Projekt stellen ihre Speicherung jetzt selbst bereit.
