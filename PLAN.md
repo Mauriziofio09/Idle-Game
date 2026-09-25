@@ -323,10 +323,10 @@ Kurzbericht + **Stopp bis zu deinem Feedback**.
 - [x] Offline-Budget: 24 h in rund 65 ms (Ziel < 1500 ms)
 
 ### M8b · Release
-- [ ] Bundle-Budget
-- [ ] Playwright-Smoke: lädt · Reparatur · Reload behält Spielstand
-- [ ] `README.md` als Portfolio-Stück, MIT-Lizenz
-- [ ] GitHub-Actions-Workflow für Pages (korrekter `base-href`)
+- [x] Bundle-Budget
+- [x] Playwright-Smoke: lädt · Reparatur · Reload behält Spielstand
+- [x] `README.md` als Portfolio-Stück, MIT-Lizenz
+- [x] GitHub-Actions-Workflow für Pages (korrekter `base-href`)
 - [ ] **Push/Deploy erst nach deiner Bestätigung**
 
 ---
@@ -1238,3 +1238,134 @@ Querschnitt ohnehin zu sehen — ihn als Zahl zu verstecken, während das Wasser
 steigt, wäre Geheimniskrämerei statt Behutsamkeit; und eine Laufzeit erst später
 einzublenden würde einen Run unvergleichbar machen. Versteckt wird, was ohne Handlung
 bedeutungslos ist: die Entropie.
+
+
+---
+
+## 18 · Stand nach M8b (Release)
+
+### Der Smoke-Test läuft gegen die ausgelieferten Dateien
+
+Drei Tests, wie Abschnitt 11 sie nennt: die App lädt, eine Reparatur wirkt, der Spielstand
+überlebt einen Reload. Bewusst nicht mehr — die Unit-Suite prüft die Regeln; was nur ein
+echter Browser sagen kann, ist, ob die *gebaute* Anwendung überhaupt startet, ob ein Klick
+die Engine erreicht und ob das Archiv nach einem Reload noch da ist.
+
+Der erste Entwurf nahm `ng serve --configuration production` und der Kommentar behauptete,
+damit seien Dinge wie ein fehlender `base-href` abgedeckt. Das stimmte nicht: ein
+Dev-Server baut aus den Quellen neu und übergeht genau diese Klasse von Fehlern. Jetzt
+baut der Testlauf die Anwendung und liefert `dist/` über `scripts/serve-dist.ts` aus —
+vierzig Zeilen, keine Abhängigkeit — und zwar unter demselben Pfadpräfix, das GitHub Pages
+benutzt. Gegenprobe: ohne `--base-href` gebaut und unter `/Idle-Game/` ausgeliefert fallen
+alle drei Tests. Die Behauptung deckt sich jetzt mit dem, was tatsächlich geprüft wird.
+
+Zwei weitere Entscheidungen:
+
+- **Port 4300 statt 4200**, damit ein Dev-Server, den jemand offen hat, weder versehentlich
+  mitbenutzt noch abgeschossen wird.
+- **Die Texte kommen aus `content/de.ts`**, nicht abgeschrieben. Sonst behauptet die Datei
+  irgendwann einen Satz, den niemand mehr anzeigt. Der erste Entwurf hatte genau das: er
+  erwartete „Das Wasser steigt", im Spiel steht „Das Wasser steht seit dem Frühjahr in der
+  Stadt."
+
+Gegengeprüft, dass sie beißen: Autosave stillgelegt → der Reload-Test fällt. Reparatur ohne
+Integritätsgewinn → der Reparatur-Test fällt. Ohne `base-href` gebaut → alle drei fallen.
+Und die Reload-Toleranz stand zunächst bei 10 Integritätspunkten, wo real 0,3 verfallen —
+weit genug, dass ein Speichervorgang, der bei *jedem* Schreiben 8 Punkte verschluckt, den
+Test bestanden hätte. Jetzt 2 Punkte, und genau diese Mutation fällt.
+
+Der Test prüft außerdem, dass **kein einziger externer Request** stattfindet — Abschnitt 12
+verlangt das, und bisher war es nur eine Behauptung.
+
+### `role="log"` nachgetragen
+
+Der Smoke-Test suchte das Archivlog über seine Rolle und fand es nicht: es war ein
+`<ol aria-live="polite">`. `role="log"` ist genau das, was es ist, und impliziert die
+Live-Region ohnehin. Das Attribut bleibt zusätzlich stehen, weil manche Screenreader eine
+Live-Region nur dann zuverlässig ansagen, wenn sie ausgeschrieben ist.
+
+### Bundle-Budget
+
+Es stand auf 500 kB Warnung / 1 MB Fehler bei tatsächlichen 335 kB — es hätte nie etwas
+gehalten. Jetzt 380 kB / 450 kB, also 13 % Spielraum: genug, dass eine normale Änderung
+nicht anschlägt, wenig genug, dass eine versehentlich eingezogene Bibliothek auffällt.
+Das Offline-Ziel liegt unverändert bei rund 70 ms für 24 Stunden (Ziel < 1500 ms).
+
+### Zwei Workflows statt einem
+
+- **`ci.yml`** läuft bei jedem Push und Pull Request: Lint, Unit-Tests, Kontrast, Build,
+  Balancing-Simulation über 40 Seeds und der Smoke-Test.
+- **`pages.yml`** veröffentlicht, und zwar **nur auf ausdrückliche Auslösung**
+  (`workflow_dispatch`). Abschnitt 11 sagt, dass Deployen auf deine Bestätigung geschieht;
+  ein Workflow, der bei jedem Push auf `main` feuert, nähme dir genau diese Entscheidung
+  ab. Der Kommentar im Workflow sagt, wie man es auf Dauerbetrieb umstellt.
+
+Der `base-href` wird aus dem Repository-Namen abgeleitet
+(`--base-href "/${{ github.event.repository.name }}/"`), nicht ausgeschrieben — Pages
+liefert ein Projekt-Repo unter `/<name>/` aus, und bei einer Umbenennung würde ein
+fest eingetragener Pfad jede Datei auf 404 laufen lassen. Lokal verifiziert: der Build
+schreibt `<base href="/Idle-Game/">`. Zusätzlich wird `index.html` als `404.html` kopiert,
+sonst beantwortet Pages einen Reload auf einem anderen Pfad mit seiner eigenen
+Fehlerseite statt mit der App.
+
+Der Pages-Workflow wiederholt Lint, Tests und Kontrast vor dem Bauen. Etwas zu
+veröffentlichen, das seine eigenen Tests nicht besteht, würde den CI-Workflow zur
+Dekoration machen.
+
+### README
+
+Englisch, als Portfolio-Stück: Pitch, Screenshot-Platzhalter (drei, mit Angabe, was genau
+aufzunehmen ist), Spielanleitung, Design-Notizen und Tech-Stack. Die Design-Notizen nennen
+auch das, was **nicht** geklappt hat — das vierte Balancing-Ziel, die falsche erste
+Erklärung dafür, und der Fokus-Fehler, der sechsmal auftrat und beim sechsten Mal falsch
+repariert wurde. Ein Portfolio-Stück, das nur die Erfolge zeigt, sagt weniger über die
+Arbeit aus als eines, das die Korrekturen mitzeigt.
+
+### Offen
+
+- **Der Copyright-Halter in `LICENSE`** ist „Maurizio Fiore", abgeleitet aus Git-Namen und
+  E-Mail. Bitte einmal prüfen — geraten habe ich ihn nicht gern.
+- **Screenshots** fehlen noch; die README sagt, welche drei und in welchem Zustand.
+- **Push und Deploy** stehen weiterhin aus und passieren nur auf deine Ansage.
+
+### Zahlen
+
+344 Unit-Tests plus 3 Smoke-Tests, Bundle 335,55 kB roh / 87,51 kB übertragen, Build ohne
+Warnungen, Kontrast 12/12 AA, Offline 24 h in rund 70 ms.
+
+
+### Nachträge aus der M8b-Review
+
+Die Review bestätigte, dass nichts gepusht oder deployt wurde, dass Abschnitt 12 eingehalten
+ist (Playwright nur als devDependency, keine externen Requests im Bundle), dass die Budgets
+wirklich greifen, dass der `base-href` korrekt ist und dass der Smoke-Test nicht dekorativ
+ist. Sieben Mängel, alle behoben:
+
+1. **Eine nachweislich falsche Behauptung im Portfolio-Dokument.** Die README setzte ein
+   Häkchen hinter „Naiv 19,7 min" gegen ein Ziel von 20–35 min. Schlimmer als das Häkchen
+   war der Grund, warum es mir durchging: `balance.spec.ts` prüfte **60** Seeds, wo der
+   Median bei 22,1 liegt, während `npm run sim` mit **200** Seeds 19,7 misst. Test und
+   veröffentlichte Messung widersprachen sich, und ich hatte den Widerspruch zugunsten des
+   Häkchens aufgelöst. Nachgemessen: über 200 Seeds sind es 19,6. Der Test nimmt jetzt
+   dieselbe Stichprobe wie die Simulation und trägt wieder eine dokumentierte Toleranz von
+   einer Minute. Eine Stichprobe, die klein genug gewählt ist, um zu bestehen, ist
+   schlimmer als gar kein Test.
+2. **Die Reload-Toleranz im Smoke-Test war 20-fach zu locker** (siehe oben).
+3. **„Produktionsbuild" war überzogen** (siehe oben).
+4. **Der Artefakt-Upload im CI war tot.** Der Reporter stand auf `list`, es entstand nie ein
+   HTML-Report; und `trace: 'on-first-retry'` bei `retries: 0` zeichnet nie etwas auf. Bei
+   einem roten Lauf hätte es keinerlei Diagnose gegeben. Jetzt HTML-Reporter,
+   `trace: 'retain-on-failure'`, und hochgeladen werden Report *und* `test-results/`.
+5. **Die Rechte im Pages-Workflow waren nicht minimal.** `pages: write` und `id-token:
+   write` standen auf Workflow-Ebene und galten damit auch für den Build-Job. Sie stehen
+   jetzt nur im Deploy-Job.
+6. **Das Deploy-Gate war schwächer als sein eigener Kommentar.** Es lief Lint, Tests und
+   Kontrast, aber nicht den Smoke-Test — ausgerechnet den, der einen kaputten `base-href`
+   bemerken würde, bevor es die Welt tut. Er läuft jetzt mit.
+7. **Zwei Kleinigkeiten in der README:** „130 lines of custom properties" stimmte nicht
+   (es sind 80 Deklarationen), und „no runtime dependencies beyond Angular itself" ging
+   über `rxjs` und `tslib` hinweg. Beides korrigiert.
+
+Offen gelassen: **CI läuft auf Node 24, lokal ist Node 26 installiert.** Angular 22
+unterstützt 24 offiziell; die Version im Workflow bleibt deshalb die unterstützte, nicht
+die lokale.

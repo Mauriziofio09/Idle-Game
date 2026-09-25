@@ -1,0 +1,78 @@
+# Publishes the built archive to GitHub Pages.
+#
+# Manual by default: prompt.md section 11 says deploying happens on the author's say-so,
+# and a workflow that fires on every push to main would take that decision away. Change
+# the trigger below to `push: branches: [main]` if continuous deployment is wanted later.
+name: Deploy to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+# Nothing but reading the repository at workflow level. Writing to Pages and minting the
+# deployment token are the deploy job's business alone, and are granted there.
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel one half-finished.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The same gate as CI, and all of it. This workflow can be dispatched from a branch
+      # whose CI never ran, so publishing after a partial check would make the CI workflow
+      # decorative — the smoke test especially, since it is the one that would notice a
+      # broken base href before the world does.
+      - run: npm run lint
+      - run: npm run test:run
+      - run: npm run contrast
+
+      - name: Install the browser for the smoke test
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test
+        run: npm run e2e
+
+      # Pages serves a project site from /<repository>/, so the base href has to match or
+      # every asset 404s. Taken from the repository name rather than written out, so it
+      # cannot drift if the repository is renamed.
+      - name: Build
+        run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
+
+      # Without this, a reload on any path but the root returns the Pages 404 page.
+      # Copying index.html over it makes GitHub serve the app instead.
+      - name: Serve unknown paths with the app
+        run: cp dist/entropie/browser/index.html dist/entropie/browser/404.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/entropie/browser
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # A job-level block replaces the workflow-level one, so contents is repeated here.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

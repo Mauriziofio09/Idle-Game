@@ -11,7 +11,12 @@ import { formatLogTime } from '../../format';
   selector: 'app-archive-log',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <ol aria-live="polite" aria-relevant="additions">
+    <!--
+      role="log" is what this actually is, and it carries aria-live="polite" implicitly.
+      The explicit attribute stays: some screen readers announce a live region reliably
+      only when it is spelled out, and it costs nothing to say both.
+    -->
+    <ol role="log" aria-live="polite" aria-relevant="additions">
       @for (entry of log(); track entry.id) {
         <li [class.loss]="entry.kind === 'loss'" [class.end]="entry.kind === 'end'">
           <span class="time">{{ time(entry.tick) }}</span>
