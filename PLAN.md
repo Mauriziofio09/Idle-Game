@@ -176,6 +176,14 @@ Custom Property lesen) ·
 `--stat-column-min` 96px (= 4 × `--space-6`) als Umbruchbreite der Kennzahlenspalten ·
 `--field-number-width` 5,5em für ein Zahlenfeld mit vier Stellen plus Einheit ·
 `--checkbox-size` = `--space-4` für das Kästchen ·
+**20** (M9) `--color-overlay` `rgb(0 0 0 / 0.66)` — `styles.md` kennt keine Overlay-Farbe,
+weil sie eine Seite beschreibt und keinen Dialog. Aus dem Rahmen-Schwarz zu zwei Dritteln,
+damit das Archiv hinter der Einführung lesbar bleibt statt ersetzt zu werden. Kein Weichzeichner:
+„depth comes from borders and contrast, never blur" ·
+**21** (M9) `--dialog-max-width` 496px (= `--layout-column-max` + 2 × `--space-8`) — drei
+Sätze bei 400px Breite laufen über sieben Zeilen ·
+**22** (M9) `--dot-size` = `--space-2` für den Schrittpunkt, das kleinste Quadrat, das die
+Formensprache zulässt ·
 **19** (M7) `--stat-column-min-compact` 88px (= `--space-8` + `--space-7` + `--space-2`)
 als Umbruchbreite der Kennzahlen auf dem Telefon: mit den 96px der Desktop-Ableitung passen
 bei 375px nur zwei Spalten, also brauchen fünf Zahlen drei Zeilen und 184px Bildschirm,
@@ -434,6 +442,14 @@ Energie zieht und die Zielkurve verschiebt.
 
 Die Formeln aus Abschnitt 5 sind umgesetzt wie beschrieben. Vier Stellen weichen ab oder
 füllen eine Lücke — alle vier stehen auch als Kommentar an der jeweiligen Codestelle.
+
+**Nachtrag (M9): eine bewusste Abweichung von Abschnitt 7.** Dort steht ausdrücklich
+„kein Tutorial-Modal, keine Textwand"; die Einführung sollte allein über das Log und die
+progressive Enthüllung laufen. Auf ausdrücklichen Wunsch gibt es jetzt trotzdem eine
+Einführung beim ersten Start. Die Absicht des Verbots ist dabei gewahrt: sieben Schritte
+mit höchstens drei Sätzen, auf jedem Schritt ein sichtbarer Ausgang, nur beim allerersten
+Mal, und die progressive Enthüllung bleibt unangetastet. Wer die Einführung überspringt,
+spielt exakt das Spiel, das Abschnitt 7 beschreibt.
 
 1. **Unterversorgung auf dem Übergangstick** (`engine/step.ts`, Schritt 2).
    Abschnitt 5.6 schreibt `Effizienz = Produktion / Bedarf`. Genau auf dem Tick, an dem der
@@ -1400,3 +1416,72 @@ auf diesem Test, damit ein echtes Hängen anderswo weiterhin schnell auffällt.
 Lehre fürs Protokoll: **eine Zeitgrenze ist eine Zusicherung über die langsamste Maschine,
 die den Test ausführt, nicht über die schnellste.** Der nächstlangsamste Test liegt bei
 925 ms auf CI; dazwischen ist genug Luft.
+
+---
+
+## 19 · Stand nach M9 (Übersichtlichkeit & Einführung)
+
+Zwei Wünsche nach dem Deploy: die Seite sei „mega weit unten" und unübersichtlich, und es
+solle eine Einführung beim ersten Start geben.
+
+### Gemessen, bevor etwas bewegt wurde
+
+Auf 1412 × 828:
+
+| | vorher | nachher |
+|---|---|---|
+| Seitenhöhe (laufender Run) | 3337 px · **4 Bildschirme** | **772 px · 1 Bildschirm** |
+| Panel-Spalte | 2464 px | 430 px |
+| Querschnitt | 475 px | 475 px |
+
+Die Panel-Spalte war **fünfmal so hoch wie der Querschnitt**, um den das ganze Spiel geht:
+Archive 678, Einstellungen 502, Vermächtnis 458, Protokolle 367, Log 216, Auswahl 124 —
+alle untereinander. Man scrollte an vier Bildschirmen Verwaltung vorbei, um das Haus zu
+sehen.
+
+### Die Lösung war schon da
+
+Die Tab-Leiste aus M7 war fertig, getestet und barrierefrei — sie war nur oberhalb von
+600px ausgeblendet, weil `prompt.md` Abschnitt 7 Tabs ausdrücklich für „Mobile" nennt. Sie
+bei jeder Breite einzuschalten ersetzt 2464px durch ein Panel. Die Telefonansicht hatte
+die ganze Zeit recht.
+
+Drei Ergänzungen dazu:
+
+- **Das Archivlog verlässt die Leiste** und steht dauerhaft darunter. Es hinter einen
+  Reiter zu legen hieße, zwischen Handeln und Hören wählen zu müssen, was die Handlung
+  bewirkt hat.
+- **Die Ressourcenleiste klebt oben.** Energie und Pegel sind die Zahlen, gegen die jede
+  Entscheidung fällt; zurückscrollen zu müssen war das, was die lange Seite anstrengend
+  machte statt bloß lang.
+- **Die Leiste bricht um, statt seitwärts zu scrollen** — aber erst ab 600px. Auf dem
+  Telefon würde eine dreizeilige Leiste das Archiv nach unten schieben, also scrollt sie
+  dort weiter. Auf dem Desktop kostet der Umbruch einmalig vierzig Pixel und macht
+  „Einstellungen" sichtbar, das vorher hinter einer Geste lag, die dort niemand erwartet.
+
+An der Formensprache ändert sich nichts: dieselben Tokens, dieselben 2-px-Rahmen, kein
+Radius, kein Schatten. Der offene Reiter invertiert genauso wie ein ausgewählter Chip im
+Querschnitt.
+
+### Die Einführung
+
+Sieben Schritte in der Stimme des Archivs, mit Pfeilen oder Knöpfen zu durchlaufen,
+überspringbar auf jedem Schritt, und sie kommt nie wieder — die Entscheidung liegt unter
+einem eigenen Schlüssel, weil sie der Person gilt und nicht dem Run. Ein neues Archiv oder
+ein harter Reset holt sie nicht zurück; die Einstellungen haben dafür einen Knopf.
+
+Ein echter Dialog: `role="dialog"`, `aria-modal`, Fokus wandert hinein und wird dort
+gehalten, Escape führt hinaus, die Pfeiltasten blättern, und beim Schließen kommt der
+Fokus auf die Seitenüberschrift statt ins Leere. Gegengeprüft: ohne Escape-Behandlung,
+ohne Pfeiltasten, ohne das Merken und ohne die Fokusrückgabe fällt jeweils ein Test.
+
+### Was der Smoke-Test dabei gefunden hat
+
+Die Einführung legte sich über das Archiv und blockierte die Klicks — zwei von drei
+Smoke-Tests liefen in die Zeitgrenze. Das ist kein Fehler, sondern das Modal, das seine
+Arbeit tut: ein neuer Spieler muss auch daran vorbei. Der Test klickt sie jetzt weg wie
+ein Spieler, und ein **vierter** Test ist dazugekommen, der im echten Browser beweist,
+dass die Einführung erscheint, sich durchblättern lässt und nach einem Reload nicht
+wiederkommt.
+
+352 Unit-Tests, 4 Smoke-Tests, Bundle 344,08 kB roh / 89,54 kB übertragen.

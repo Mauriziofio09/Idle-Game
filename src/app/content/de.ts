@@ -141,14 +141,13 @@ export const HINTS = {
 } as const;
 
 /**
- * Short labels for the tab strip that replaces the panel stack on a phone.
- * Short because six of them have to fit across 375 px without the strip becoming a
- * puzzle; the panels keep their full titles once open.
+ * Short labels for the tab strip that replaces the panel stack.
+ * Short because they have to fit across 375 px without the strip becoming a puzzle;
+ * the panels keep their full titles once open.
  */
 export const PANEL_TABS = {
   detail: 'Auswahl',
   protocols: 'Protokolle',
-  log: 'Log',
   legacy: 'Vermächtnis',
   scenarios: 'Archive',
   settings: 'Einstellungen',
@@ -156,6 +155,76 @@ export const PANEL_TABS = {
 
 /** Names the tab strip for screen readers, since the tabs themselves are single words. */
 export const PANEL_TABS_LABEL = 'Panels';
+
+/**
+ * Die Einführung beim ersten Start.
+ *
+ * Abweichung von prompt.md Abschnitt 7, das ausdrücklich „kein Tutorial-Modal, keine
+ * Textwand" verlangt — auf ausdrücklichen Wunsch, siehe PLAN.md Abschnitt 9. Die Absicht
+ * dahinter bleibt aber gewahrt: sieben kurze Schritte in der Stimme des Archivs, jeder
+ * höchstens drei Sätze, jederzeit überspringbar und nur beim ersten Mal.
+ */
+export const TUTORIAL = {
+  title: 'Bevor du anfängst',
+  skip: 'Überspringen',
+  back: 'Zurück',
+  next: 'Weiter',
+  start: 'Anfangen',
+  /** „Schritt 2 von 7" */
+  progress: (current: string, total: string) => `Schritt ${current} von ${total}`,
+  reopen: 'Einführung erneut zeigen',
+  steps: [
+    {
+      heading: 'Das Wasser kam im Frühjahr',
+      body: [
+        'Die Stadt ist fort. Was von ihr übrig ist, steht in diesem Haus: fünf Etagen, sechs Sammlungen, ein Generator.',
+        'Du bist KUSTOS, das Wartungssystem des Archivs. Niemand wird zurückkommen, um dich abzulösen.',
+      ],
+    },
+    {
+      heading: 'Das Haus von der Seite',
+      body: [
+        'In der Mitte siehst du den Querschnitt. Das Wasser steigt von unten, der Regen fällt von oben, und jedes System steht auf seiner Etage.',
+        'Klick auf etwas — eine Etage, ein System, eine Sammlung —, und rechts erscheint, was du damit tun kannst und was es kostet.',
+      ],
+    },
+    {
+      heading: 'Vier Zahlen, die alles entscheiden',
+      body: [
+        'Oben stehen Energie, Material, Pegel und Laufzeit. Jede trägt ihre Rate mit, damit du planen kannst statt zu raten.',
+        'Der Generator im Erdgeschoss speist alles. Steigt das Wasser bis zu ihm, ist es vorbei.',
+      ],
+    },
+    {
+      heading: 'Reparieren hat einen Preis',
+      body: [
+        'Jede Reparatur kostet Material, Energie — und Entropie. Die Entropie fällt nie. Sie lässt das ganze Haus schneller zerfallen und den Regen stärker werden.',
+        'Die Uhr des Archivs ist die Summe deiner eigenen Eingriffe.',
+      ],
+    },
+    {
+      heading: 'Der Sendemast',
+      body: [
+        'Nach etwa zwei Minuten meldet sich der Mast. Er ist die einzige Maschine im Haus, die überhaupt etwas rettet.',
+        'Gesendetes ist für immer sicher — auch über spätere Archive hinweg. Eine volle Sammlung dauert rund elf Minuten.',
+      ],
+    },
+    {
+      heading: 'Wenn du weg bist',
+      body: [
+        'Nach deiner ersten Reparatur erscheinen die Protokolle: einfache Wenn-Dann-Regeln, die das Kustoden-Depot ausführt, während du nicht da bist.',
+        'Offline läuft dieselbe Simulation wie hier. Kommst du zurück, liest du in Ruhe, was passiert ist.',
+      ],
+    },
+    {
+      heading: 'Das Archiv fällt',
+      body: [
+        'Du kannst es nicht retten. Das Wasser steigt schneller, als die Pumpen es halten, und Material geht nur zur Neige.',
+        'Die einzige Frage, die dieses Spiel stellt, lautet: Was kommt hinaus, bevor das Licht ausgeht?',
+      ],
+    },
+  ],
+} as const;
 
 export const PANEL_TITLES = {
   detail: 'Auswahl',

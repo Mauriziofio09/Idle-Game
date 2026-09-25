@@ -87,14 +87,33 @@ describe('App', () => {
       const element = fixture.nativeElement as HTMLElement;
 
       // Walk away from the selection panel first, then pick something in the house.
-      const logTab = element.querySelector<HTMLButtonElement>('#tab-log');
-      logTab?.click();
+      const otherTab = element.querySelector<HTMLButtonElement>('#tab-settings');
+      otherTab?.click();
       await fixture.whenStable();
-      expect(logTab?.getAttribute('aria-selected')).toBe('true');
+      expect(otherTab?.getAttribute('aria-selected')).toBe('true');
 
       store.select({ kind: 'system', id: 'pumps' });
       await fixture.whenStable();
       expect(element.querySelector('#tab-detail')?.getAttribute('aria-selected')).toBe('true');
+    });
+
+    it('keeps the archive log out of the strip and on the screen', async () => {
+      // The log is what the archive is telling you while you play. Putting it behind a
+      // tab would mean choosing between acting and hearing what the action did, so it
+      // sits below the strip at every width and has no tab of its own.
+      const fixture = TestBed.createComponent(App);
+      await fixture.whenStable();
+      const element = fixture.nativeElement as HTMLElement;
+
+      expect(element.querySelector('#tab-log')).toBeNull();
+      const log = element.querySelector('[role="log"]');
+      expect(log).toBeTruthy();
+      expect(element.querySelector('.log')?.contains(log!)).toBe(true);
+
+      // And it stays there whichever panel is open.
+      element.querySelector<HTMLButtonElement>('#tab-settings')?.click();
+      await fixture.whenStable();
+      expect(element.querySelector('[role="log"]')).toBeTruthy();
     });
 
     it('is a real tab strip, named, and in the order the game is played in', async () => {
@@ -114,7 +133,6 @@ describe('App', () => {
       expect([...element.querySelectorAll('[role="tab"]')].map((tab) => tab.id)).toEqual([
         'tab-detail',
         'tab-protocols',
-        'tab-log',
         'tab-legacy',
         'tab-scenarios',
         'tab-settings',

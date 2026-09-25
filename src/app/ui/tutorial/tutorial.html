@@ -1,0 +1,49 @@
+<div class="backdrop">
+  <!--
+    The key handling sits on the dialog rather than the backdrop: focus is held inside it,
+    so that is where the keys arrive, and a backdrop that listened would have to be made
+    focusable for no reason. tabindex="-1" lets the container itself take focus if a step
+    ever has no button to land on.
+  -->
+  <div
+    #dialog
+    class="dialog"
+    role="dialog"
+    tabindex="-1"
+    (keydown)="onKeydown($event)"
+    aria-modal="true"
+    aria-labelledby="tutorial-heading"
+    aria-describedby="tutorial-body"
+  >
+    <p class="section-label">{{ labels.title }}</p>
+
+    <h2 id="tutorial-heading">{{ step().heading }}</h2>
+
+    <div id="tutorial-body" class="body">
+      @for (paragraph of step().body; track paragraph) {
+        <p>{{ paragraph }}</p>
+      }
+    </div>
+
+    <!-- The dots say where you are without asking anyone to count steps. -->
+    <div class="progress">
+      <span class="dots" aria-hidden="true">
+        @for (dot of steps; track $index) {
+          <span class="dot" [class.here]="$index === steps.indexOf(step())"></span>
+        }
+      </span>
+      <span class="count">{{ progress() }}</span>
+    </div>
+
+    <div class="actions">
+      <app-button variant="secondary" [disabled]="isFirst()" (pressed)="back()">
+        {{ labels.back }}
+      </app-button>
+      <app-button #primary (pressed)="next()">
+        {{ isLast() ? labels.start : labels.next }}
+      </app-button>
+    </div>
+
+    <button type="button" class="skip" (click)="skip()">{{ labels.skip }}</button>
+  </div>
+</div>

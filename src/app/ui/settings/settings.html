@@ -3,6 +3,12 @@
 }
 
 <div class="block">
+  <app-button variant="secondary" (pressed)="showIntroductionAgain()">
+    {{ tutorialLabels.reopen }}
+  </app-button>
+</div>
+
+<div class="block">
   <p class="section-label">{{ labels.sound }}</p>
   <label class="toggle">
     <input

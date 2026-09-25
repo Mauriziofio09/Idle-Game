@@ -1,3 +1,7 @@
+@if (showTutorial()) {
+  <app-tutorial (closed)="closeTutorial()" />
+}
+
 <main>
   <header>
     <app-icon-box size="sm" class="accent">
@@ -40,6 +44,7 @@
       <app-cross-section />
     </app-card>
 
+    <div class="side">
     <div
       class="tabs"
       role="tablist"
@@ -92,18 +97,6 @@
       }
 
       <div
-        id="panel-log"
-        class="panel"
-        role="tabpanel"
-        aria-labelledby="tab-log"
-        [class.active]="activePanel() === 'log'"
-      >
-        <app-card [label]="titles.log">
-          <app-archive-log />
-        </app-card>
-      </div>
-
-      <div
         id="panel-legacy"
         class="panel"
         role="tabpanel"
@@ -138,6 +131,16 @@
           <app-settings />
         </app-card>
       </div>
+    </div>
+
+    <!--
+      The log sits outside the strip on purpose: it is what the archive is telling you
+      while you play, and hiding it behind a tab would mean choosing between acting and
+      hearing what your action did.
+    -->
+    <app-card class="log" [label]="titles.log">
+      <app-archive-log />
+    </app-card>
     </div>
   </div>
 </main>

@@ -98,6 +98,18 @@
   --breakpoint-grid: 900px; /* DERIVED, decision 9 — documentation only; @media needs a literal */
   /* DERIVED 10 — narrowest a stat column may get before the grid reflows (4 x --space-6). */
   --stat-column-min: 96px;
+  /* DERIVED 20 — styles.md knows no overlay, because it describes a page and not a
+     dialog. Built from the border black at two thirds, so the archive stays legible
+     behind the introduction instead of being replaced by it. No blur: "depth comes from
+     borders and contrast, never blur". */
+  --color-overlay: rgb(0 0 0 / 0.66);
+  /* DERIVED 21 — the dialog is wider than the 400px card stack because three sentences
+     at that width run to seven lines. --layout-column-max + --space-8 x 2 keeps it close
+     to the column it interrupts. */
+  --dialog-max-width: 496px;
+  /* DERIVED 22 — the step dot, the smallest square the shape language allows: --space-2. */
+  --dot-size: var(--space-2);
+
   /* DERIVED 19 — at 375 px the 96px minimum leaves room for only two columns, so the five
      figures need three rows and 184px of the screen before the archive even begins.
      --space-8 + --space-7 + --space-2 (48 + 32 + 8) fits three columns across a phone

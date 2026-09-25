@@ -1,0 +1,116 @@
+/*
+ * The introduction. Same shape language as the rest: 2px black borders, no radius, no
+ * shadow, Helvetica. It is a card that happens to sit above the page, not a new style.
+ */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-overlay);
+  /* Scrollable when a short window cannot hold the dialog; the card never clips. */
+  overflow-y: auto;
+}
+
+.dialog {
+  width: 100%;
+  max-width: var(--dialog-max-width);
+  padding: var(--space-6);
+  background: var(--color-background);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+h2 {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-none);
+}
+
+.body {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.body p {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-3);
+  border-top: var(--border-hairline);
+}
+
+.dots {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Square, like everything else. The current step fills in; the others are outlines. */
+.dot {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border: var(--border-hairline);
+  border-radius: var(--radius);
+  background: var(--color-background);
+}
+
+.dot.here {
+  background: var(--color-border);
+}
+
+.count {
+  font-size: var(--font-size-label);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* The way out, deliberately quiet but never hidden — it is on every step. */
+.skip {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+
+.skip:hover {
+  color: var(--color-text-primary);
+}
+
+/* A phone: the dialog takes the width it can get and the buttons stack. */
+@media (max-width: 599px) {
+  .dialog {
+    padding: var(--space-4);
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}

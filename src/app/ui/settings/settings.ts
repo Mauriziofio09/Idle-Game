@@ -10,8 +10,9 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { IMPORT_PROBLEMS, SETTINGS_LABELS } from '../../content/de';
+import { IMPORT_PROBLEMS, SETTINGS_LABELS, TUTORIAL } from '../../content/de';
 import { GameStore } from '../../game/game-store';
+import { Onboarding } from '../../game/onboarding';
 import { Sound } from '../../game/sound';
 import { Button } from '../kit/button';
 
@@ -31,9 +32,11 @@ import { Button } from '../kit/button';
 export class Settings {
   private readonly store = inject(GameStore);
   private readonly sound = inject(Sound);
+  private readonly onboarding = inject(Onboarding);
   private readonly injector = inject(Injector);
 
   protected readonly labels = SETTINGS_LABELS;
+  protected readonly tutorialLabels = TUTORIAL;
   protected readonly canSave = this.store.canSave;
 
   /** prompt.md section 7 wants sound off by default, with the switch in the settings. */
@@ -41,6 +44,10 @@ export class Settings {
 
   protected setSound(on: boolean): void {
     this.sound.setEnabled(on);
+  }
+
+  protected showIntroductionAgain(): void {
+    this.onboarding.showAgain();
   }
 
   protected readonly exported = signal<string | null>(null);

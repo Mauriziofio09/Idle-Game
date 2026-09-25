@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { APP, LOG, RESOURCE_LABELS, SYSTEM_NAMES, ACTION_LABELS } from '../src/app/content/de';
+import {
+  ACTION_LABELS,
+  APP,
+  LOG,
+  RESOURCE_LABELS,
+  SYSTEM_NAMES,
+  TUTORIAL,
+} from '../src/app/content/de';
 
 /**
  * The release smoke test from prompt.md section 11: the app loads, a repair works, and a
@@ -28,6 +35,13 @@ async function openArchive(page: Page) {
   // not, and a run against the published site landed on the account's root page instead.
   await page.goto('./');
   await expect(page.getByRole('heading', { name: APP.title, level: 1 })).toBeVisible();
+
+  // Every context starts with empty storage, so a first-timer's introduction is in the
+  // way — exactly as it is for a real newcomer. Past it the way a player gets past it.
+  const introduction = page.getByRole('dialog');
+  await expect(introduction).toBeVisible();
+  await introduction.getByRole('button', { name: TUTORIAL.skip }).click();
+  await expect(introduction).toBeHidden();
 }
 
 /** A figure from the top bar, by its label. */
@@ -78,6 +92,27 @@ test('the archive opens, and says where it is', async ({ page, baseURL }) => {
 
   // prompt.md section 12: no external requests, ever. Not a font, not a favicon.
   expect(external).toEqual([]);
+});
+
+test('introduces the archive once, and then leaves the player alone', async ({ page }) => {
+  await page.goto('./');
+  const introduction = page.getByRole('dialog');
+  await expect(introduction).toBeVisible();
+  await expect(introduction).toContainText(TUTORIAL.steps[0].heading);
+
+  // Forward to the last step and out through the front door rather than the skip.
+  for (let step = 1; step < TUTORIAL.steps.length; step += 1) {
+    await introduction.getByRole('button', { name: TUTORIAL.next }).click();
+    await expect(introduction).toContainText(TUTORIAL.steps[step].heading);
+  }
+  await introduction.getByRole('button', { name: TUTORIAL.start }).click();
+  await expect(introduction).toBeHidden();
+
+  // And it does not come back. This is the part a unit test cannot prove: that the
+  // choice survives a real reload in a real browser.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: APP.title, level: 1 })).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeHidden();
 });
 
 test('repairing a system raises it, costs something and is written to the log', async ({

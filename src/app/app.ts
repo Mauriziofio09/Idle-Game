@@ -35,6 +35,7 @@ import { AutoSave } from './game/autosave';
 import type { AwayReport } from './game/away-report';
 import { GameLoop } from './game/game-loop';
 import { GameStore } from './game/game-store';
+import { Onboarding } from './game/onboarding';
 import { Sound } from './game/sound';
 import { formatDuration, formatPercent } from './format';
 import { ArchiveLog } from './ui/archive-log/archive-log';
@@ -47,12 +48,13 @@ import { Legacy } from './ui/legacy/legacy';
 import { Protocols } from './ui/protocols/protocols';
 import { Scenarios } from './ui/scenarios/scenarios';
 import { Settings } from './ui/settings/settings';
+import { Tutorial } from './ui/tutorial/tutorial';
 import { Card } from './ui/kit/card';
 import { Icon } from './ui/kit/icon';
 import { IconBox } from './ui/kit/icon-box';
 
 /** The panels that share the strip on a phone. */
-type PanelId = 'detail' | 'protocols' | 'log' | 'legacy' | 'scenarios' | 'settings';
+type PanelId = 'detail' | 'protocols' | 'legacy' | 'scenarios' | 'settings';
 
 @Component({
   selector: 'app-root',
@@ -71,6 +73,7 @@ type PanelId = 'detail' | 'protocols' | 'log' | 'legacy' | 'scenarios' | 'settin
     Scenarios,
     ReturnSummary,
     Settings,
+    Tutorial,
   ],
   templateUrl: './app.html',
   styleUrl: './app.css',
@@ -80,6 +83,7 @@ export class App implements OnInit {
   private readonly loop = inject(GameLoop);
   private readonly autoSave = inject(AutoSave);
   private readonly sound = inject(Sound);
+  private readonly onboarding = inject(Onboarding);
   private readonly injector = inject(Injector);
   private readonly title = viewChild<ElementRef<HTMLElement>>('pageTitle');
 
@@ -124,6 +128,15 @@ export class App implements OnInit {
     }
   });
 
+  /** The introduction, shown once. See game/onboarding.ts. */
+  protected readonly showTutorial = this.onboarding.showIntroduction;
+
+  protected closeTutorial(): void {
+    this.onboarding.markSeen();
+    // The introduction covered the page; put the keyboard back at the top of it.
+    afterNextRender(() => this.title()?.nativeElement.focus(), { injector: this.injector });
+  }
+
   protected readonly revealed = this.store.revealed;
 
   /**
@@ -144,7 +157,6 @@ export class App implements OnInit {
       tabs.push({ id: 'protocols', label: PANEL_TABS.protocols });
     }
     tabs.push(
-      { id: 'log', label: PANEL_TABS.log },
       { id: 'legacy', label: PANEL_TABS.legacy },
       { id: 'scenarios', label: PANEL_TABS.scenarios },
       { id: 'settings', label: PANEL_TABS.settings },

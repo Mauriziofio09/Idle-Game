@@ -41,6 +41,31 @@ h1 {
   gap: var(--space-6);
 }
 
+/*
+ * The figures stay put while you read further down. Energy and the water level are what
+ * every decision is made against, and having to scroll back up to see them is what made
+ * the long page tiring rather than merely long.
+ *
+ * The card keeps its own border and white background, so nothing shows through it.
+ */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* The right-hand column: the strip, the panel it opens, and the log underneath. */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.log {
+  min-width: 0;
+}
+
 .ending h2 {
   font-size: var(--font-size-h2);
 }
@@ -91,69 +116,83 @@ h1 {
 }
 
 /* ------------------------------------------------------------- The panel strip
-   prompt.md section 7: "Mobile: Querschnitt oben, Panels als Tabs darunter."
+   prompt.md section 7 asks for the panels to become tabs on a phone. They are tabs at
+   every width now, and the reason is a measurement rather than a preference: stacked on
+   a desktop the six panels came to 2464 px beside a 475 px cross-section, so the page ran
+   to four screens and the building the game is about was the smallest thing on it.
 
-   Above the phone breakpoint the whole stack is on screen and the strip is not
-   rendered at all, so there is no media query to listen to in TypeScript and no
-   element to measure — the layout decides, the component only remembers which tab
-   is open. */
+   The shape language is untouched — the same 2px borders, no radius, no shadow, and the
+   open tab inverts exactly as a selected chip in the cross-section does. */
 .tabs {
-  display: none;
+  display: flex;
+  gap: 0;
+  /* On a phone the labels must not wrap: a strip growing to three rows pushes the archive
+     down, which is the problem this arrangement exists to solve. It scrolls sideways
+     instead, and the wider screen below gets the opposite treatment. */
+  overflow-x: auto;
+  border: var(--border);
 }
 
-@media (max-width: 599px) {
-  /* --breakpoint-compact; a media query cannot read a custom property. */
+@media (min-width: 600px) {
+  /* With room to spare, a hidden tab is worse than a second row: wrapping costs about
+     forty pixels once, while a sideways scrollbar hides "Einstellungen" behind a gesture
+     nobody expects on a desktop. */
   .tabs {
-    display: flex;
-    gap: 0;
-    /* Six single words do not fit across 375 px, so the strip scrolls sideways
-       rather than wrapping into a block that pushes the archive off screen. */
-    overflow-x: auto;
-    border: var(--border);
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
 
+  /* Wrapped rows need a divider above them, or the second row floats free of the first. */
   .tab {
-    flex: 0 0 auto;
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-background);
-    color: var(--color-text-primary);
-    border: none;
-    /* Structural dividers, in keeping with borders being the design. */
-    border-right: var(--border-hairline);
-    border-radius: var(--radius);
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-label);
-    font-weight: var(--font-weight-button);
-    letter-spacing: var(--letter-spacing-label);
-    text-transform: uppercase;
-    white-space: nowrap;
-    cursor: pointer;
+    border-bottom: var(--border-hairline);
   }
 
   .tab:last-child {
     border-right: none;
   }
+}
 
-  /* The strip scrolls sideways, which makes it a clipping box in both directions, so an
-     outline drawn 2px outside a tab would be cut off at the top and bottom edges. Drawing
-     it inside keeps the focus visible, which prompt.md section 7 requires. */
-  .tab:focus-visible {
-    outline-offset: calc(-1 * var(--focus-outline-offset));
-  }
+.tab {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  border: none;
+  /* Structural dividers, in keeping with borders being the design. */
+  border-right: var(--border-hairline);
+  border-radius: var(--radius);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-button);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
 
-  /* The open tab inverts, the same way a selected chip does. Not colour alone:
-     aria-selected carries it for assistive technology, and the panel below is
-     the visible answer either way. */
-  .tab.active {
-    background: var(--color-button-primary-bg);
-    color: var(--color-button-primary-fg);
-  }
+.tab:last-child {
+  border-right: none;
+}
 
-  .panel {
-    display: none;
-  }
+/* The strip scrolls sideways, which makes it a clipping box in both directions, so an
+   outline drawn 2px outside a tab would be cut off at the top and bottom edges. Drawing
+   it inside keeps the focus visible, which prompt.md section 7 requires. */
+.tab:focus-visible {
+  outline-offset: calc(-1 * var(--focus-outline-offset));
+}
 
-  .panel.active {
-    display: block;
-  }
+/* The open tab inverts, the same way a selected chip does. Not colour alone:
+   aria-selected carries it for assistive technology, and the panel below is
+   the visible answer either way. */
+.tab.active {
+  background: var(--color-button-primary-bg);
+  color: var(--color-button-primary-fg);
+}
+
+.panel {
+  display: none;
+}
+
+.panel.active {
+  display: block;
 }
