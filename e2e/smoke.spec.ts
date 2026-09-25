@@ -23,7 +23,10 @@ const SYSTEM = SYSTEM_NAMES.pumps;
 const MAX_DECAY_ACROSS_RELOAD = 2;
 
 async function openArchive(page: Page) {
-  await page.goto('/');
+  // Relative, not '/': an absolute path resolves against the origin and would leave the
+  // base path behind. Locally the dev server redirects and hides that; GitHub Pages does
+  // not, and a run against the published site landed on the account's root page instead.
+  await page.goto('./');
   await expect(page.getByRole('heading', { name: APP.title, level: 1 })).toBeVisible();
 }
 
@@ -48,10 +51,14 @@ async function repairPumps(page: Page) {
   await panel.getByRole('button', { name: ACTION_LABELS.repair }).click();
 }
 
-test('the archive opens, and says where it is', async ({ page }) => {
+test('the archive opens, and says where it is', async ({ page, baseURL }) => {
+  // "External" means off-origin, not "not localhost". The first version hardcoded
+  // localhost, which was right for the local server and wrong everywhere else: run
+  // against the published site it flagged the game's own stylesheet and bundle.
+  const origin = new URL(baseURL ?? 'http://localhost').origin;
   const external: string[] = [];
   page.on('request', (request) => {
-    if (!request.url().startsWith('http://localhost')) {
+    if (new URL(request.url()).origin !== origin) {
       external.push(request.url());
     }
   });
